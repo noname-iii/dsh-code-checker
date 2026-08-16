@@ -1,0 +1,7 @@
+# 文件作用：headless（一次性命令行会话）的 --patch 覆盖层模板。
+# 用法与 examples/web-overlay.yml 相同：
+#   把 <插件绝对路径> 替换为本插件目录的绝对路径（Windows 用 file:///D:/... 形式），
+#   然后：dsh --profile headless --patch "<本文件绝对路径>" "你的任务文本"
+- insert:
+    - id: code-checker
+      name: '<插件绝对路径>/lib/src/index.js'

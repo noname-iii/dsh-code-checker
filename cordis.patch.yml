@@ -1,0 +1,25 @@
+# 文件作用：dsh-code-checker 插件束（bundle）的配置层。
+#
+# 本文件声明“这个 npm 包是一个 dsh 插件束，贡献一个配置层”，由 package.json 的
+#   "dsh": { "bundle": { "patch": "./cordis.patch.yml" } }
+# 引用。安装后（dsh plugin --profile <name> add dsh-code-checker），
+# dsh 会把这一层插入 profile 的配置树：新增一行 id 为 code-checker 的插件行。
+#
+# 行配置可省略 —— 全部字段都有 schema 默认值（见 src/config.ts）；
+# 如需覆盖，在用户层（profile 的 cordis.patch.yml）按 id 覆写（注意覆写会整体替换 config）。
+
+- insert:                    # 向配置树插入新行
+    - id: code-checker       # 行 id（供后续按 id 覆盖/禁用）
+      name: 'dsh-code-checker' # 模块名：安装后 Node 能从 profile 的 node_modules 解析
+      # 可选覆盖示例（完整字段与默认值见 src/config.ts）：
+      # config:
+      #   autoCheck: true            # 编码轮次后自动检查
+      #   maxAutoChecksPerPrompt: 2  # 防循环上限
+      #   installDeps: true          # 有锁文件且缺 node_modules 时安装依赖
+      #   buildTimeoutMs: 180000     # 构建超时
+      #   runProbeMs: 8000           # 运行探针时长
+      #   simulate: true             # 第 3 步用户模拟
+      #   useLlm: true               # 第 2/3 步 LLM 深度分析
+      #   reportToAi: steer          # 报告回传 AI 方式：steer | inject | none
+      #   gui: true                  # /code-checker/ 面板
+      #   language: zh               # 报告语言

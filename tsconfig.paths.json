@@ -1,0 +1,6 @@
+{
+  // 文件作用：本机 @deepseek-ai/* 类型包路径映射（开发重建用）。
+  // 由 scripts/gen-tsconfig.mjs 生成；提交到仓库的是这个空版本 —— 不带任何本机路径。
+  // 需要从源码重建的开发者执行：node scripts/gen-tsconfig.mjs
+  "compilerOptions": {}
+}

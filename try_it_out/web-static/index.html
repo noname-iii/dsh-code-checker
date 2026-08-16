@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<!-- 文件作用：try_it_out 的“静态网页”示例 —— 带问候按钮与名字输入框。
+     预期：dsh-code-checker 第 3 步按 README.md 模拟用户操作（点击按钮、输入文字），
+     装 Playwright 时用真实浏览器自动化，否则回退 HTTP 探针，最终返回“没有问题”。 -->
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>示例页面</title></head>
+<body>
+<h1>欢迎使用示例页面</h1>
+<button id="hello">点我问候</button>
+<input id="name" placeholder="输入名字">
+<script>
+  document.getElementById('hello').addEventListener('click', () => {
+    const name = document.getElementById('name').value || '世界'
+    document.body.insertAdjacentHTML('beforeend', '<p>你好，' + name + '！</p>')
+  })
+</script>
+</body>
+</html>

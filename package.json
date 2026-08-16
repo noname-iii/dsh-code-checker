@@ -1,0 +1,56 @@
+{
+  "name": "dsh-code-checker",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness 代码全面检查插件：三步流水线（编译运行检查 → 功能完整性核对 → 真实用户模拟测试），自动把问题反馈给 AI 修复，可选用 GUI，并附带适用于 Trae/Qoder 等平台的独立 CLI 与 MCP 服务",
+  "keywords": ["deepseek-harness", "plugin", "code-check", "bug-check", "qa", "simulation", "mcp"],
+  "type": "module",
+  "main": "lib/src/index.js",
+  "types": "lib/src/index.d.ts",
+  "bin": {
+    "dsh-code-checker": "lib/cli/index.js"
+  },
+  "files": [
+    "lib",
+    "simulators",
+    "scripts",
+    "examples",
+    "try_it_out",
+    "tests",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh.md",
+    "需求.txt"
+  ],
+  "exports": {
+    ".": {
+      "types": "./lib/src/index.d.ts",
+      "default": "./lib/src/index.js"
+    },
+    "./engine": {
+      "types": "./lib/engine/index.d.ts",
+      "default": "./lib/engine/index.js"
+    },
+    "./cli": "./lib/cli/index.js",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "node scripts/build.mjs --typecheck",
+    "test": "node --test --experimental-test-isolation=none tests/engine.test.mjs tests/harness.test.mjs",
+    "selfcheck": "node scripts/selfcheck.mjs",
+    "prepare": "node scripts/build.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/schemastery": "*"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}

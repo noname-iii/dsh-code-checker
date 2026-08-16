@@ -1,0 +1,38 @@
+{
+  // 文件作用：本项目的 TypeScript 类型检查配置（开发用；发布包无需 TypeScript）。
+  // 通过 "extends" 引用 tsconfig.paths.json —— 后者由 scripts/gen-tsconfig.mjs
+  // 按本机 deepseek-harness 检出一生成（或为空），因此本文件不包含任何本机路径，
+  // 项目下载到任意位置都可直接使用（运行 lib/ 产物）。
+  "extends": "./tsconfig.paths.json",
+  "compilerOptions": {
+    // 目标运行时与模块体系：ES2023 + NodeNext（Node ≥ 20，纯 ESM）
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2023"],
+    // 只使用 Node 类型（引擎/CLI 仅依赖 node: 内置模块）
+    "types": ["node"],
+    // 严格模式全家桶：不允许隐含 any 等宽松写法
+    "strict": true,
+    // 基础路径（tsc 7 弃用告警静默）
+    "ignoreDeprecations": "6.0",
+    // 类型检查不产出文件
+    "noEmit": true,
+    // 跳过对 .d.ts 内部的检查（提速，错误由作者仓库保证）
+    "skipLibCheck": true,
+    // Windows 下大小写不敏感的文件系统也强制一致命名
+    "forceConsistentCasingInFileNames": true,
+    // 数组索引访问不再假定非 undefined
+    "noUncheckedIndexedAccess": true,
+    // catch 到的错误是 unknown 类型，需显式收窄
+    "useUnknownInCatchVariables": true,
+    // 类型导入必须写 import type（保证编译产物干净）
+    "verbatimModuleSyntax": true,
+    // 单文件独立转译模式（与 tsdown/esbuild 行为一致）
+    "isolatedModules": true,
+    // 解析相对导入的基准目录
+    "baseUrl": "."
+  },
+  // 参与类型检查的目录
+  "include": ["src", "engine", "cli"]
+}

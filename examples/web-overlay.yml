@@ -1,0 +1,18 @@
+# 文件作用：web 配置树的 --patch 覆盖层模板 —— 免安装把插件挂进 dsh web。
+#
+# 用法（推荐先安装为插件束，见 README；本文件仅作免安装模板）：
+#   1. 把下方 <插件绝对路径> 替换成你机器上本插件目录的绝对路径：
+#        Windows:  file:///D:/你的目录/dsh-code-checker/lib/src/index.js
+#                  （注意 Windows 必须用 file:/// 形式，loader 直接 import 非相对名字时要求合法 URL）
+#        macOS/Linux: /home/你/dsh-code-checker/lib/src/index.js
+#   2. 运行：pnpm dsh web --patch "<本文件绝对路径>"
+#       或：  dsh web --patch "<本文件绝对路径>"
+- insert:
+    - id: code-checker
+      name: '<插件绝对路径>/lib/src/index.js'
+      # 默认配置即开箱即用；可按需覆盖（完整字段见 src/config.ts）：
+      # config:
+      #   autoCheck: true
+      #   maxAutoChecksPerPrompt: 2
+      #   simulate: true
+      #   gui: true

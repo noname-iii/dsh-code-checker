@@ -1,0 +1,8 @@
+{
+  "name": "broken-build",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "node build.js",
+    "lint": "node lint.js"
+  }
+}
