@@ -35,8 +35,9 @@ import type { CheckOptions } from '../engine/types.js'  // 导入引擎类型 Ch
 import { makeExec, makeStart } from './exec.js'  // 导入进程适配器工厂：makeExec（前台执行）、makeStart（后台启动）
 import { makeOpenAiAnalyzer } from './llm.js'  // 导入 OpenAI 兼容接口的 LLM 分析器工厂函数
 import { runMcpServer } from './mcp.js'  // 导入 MCP 服务器启动函数
+import { readPackageVersion } from './version.js'  // 导入版本号读取函数（唯一事实来源是 package.json）
 
-const VERSION = '0.1.0'  // 定义 CLI 版本号常量
+const VERSION = readPackageVersion()  // 从 package.json 读取版本号（发布包与源码开发两种层级都兼容）
 
 function usage(exitCode = 0): never {  // 打印用法说明并退出进程；返回类型 never 表示该函数永不正常返回
   // 向标准错误输出用法文本

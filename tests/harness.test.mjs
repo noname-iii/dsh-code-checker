@@ -3,7 +3,8 @@
 // 设计说明：用“假 ctx / 假服务”模拟真实 harness 行为，无需真正启动 harness
 // 即可验证两块关键集成逻辑：
 //   1. 会话跟踪器（src/tracker.js）—— 在 agent/turn-stopping 检查点内
-//      对“有编码活动的轮次”自动触发检查，并遵守防循环上限；
+//      对“有编码活动的轮次”自动触发检查，支持“检查→报告→修复→再检查”闭环，
+//      并遵守每用户提示的防循环上限；
 //   2. GUI（src/gui.js）—— 路由挂载、面板页面与 API 的真实 HTTP 渲染。
 // 真实 harness 内的端到端闭环由 try_it_out 与真实会话验证覆盖。
 
@@ -63,7 +64,7 @@ function makeTrackerDeps() {
       autoCheck: true,
       maxAutoChecksPerPrompt: 2,             // 每用户提示最多 2 次自动检查
       minCodingCalls: 1,                     // 至少 1 次编码工具调用才触发
-      codingTools: ['write', 'bash', 'pwsh', 'run_code'], // 编码工具名单
+      codingTools: ['write', 'edit', 'bash', 'pwsh', 'run_code'], // 编码工具名单
     },
     isRoot: () => true,                      // 都视为根 agent
     runCheckForAgent: async (agent, reason, extra, signal) => { // 假检查执行
@@ -109,38 +110,56 @@ test('跟踪器：无编码活动的轮次不触发检查', async () => {
   assert.equal(deps.calls.length, 0, '纯聊天不应触发检查') // 不应执行检查
 })
 
-test('跟踪器：同一轮只检查一次；每用户提示最多 maxAutoChecksPerPrompt 次；新用户消息后重置', async () => {
+test('跟踪器：检查→修复→再检查闭环（有新的编码活动就再次检查；无新编码不重复检查；超过上限等待新用户输入）', async () => {
   const agent = makeAgent()                   // 假 agent
   const ctx = makeFakeCtx(agent)              // 假 ctx
   const deps = makeTrackerDeps()              // 假依赖
   installTracker(ctx, deps)                   // 安装跟踪器
 
-  // 第 1 轮：编码 → 检查 1 次；同一轮再次 turn-stopping → 不再检查（checkedTurns 去重）
+  // 第 1 轮：编码 → 检查（第 1 次）
+  ctx.listeners['session/event'](agent.session, userEvent(1, '需求'))   // 用户消息
+  ctx.listeners['session/event'](agent.session, turnStartEvent(2, 1))   // 第 1 轮开始
+  ctx.listeners['session/event'](agent.session, toolEvent(3, 'write'))  // 编码：write
+  await fireTurnStopping(ctx, 1)              // 检查点 → 检查
+  assert.equal(deps.calls.length, 1, '第 1 次编码后应检查') // 第 1 次检查
+
+  // 同轮：AI 收到报告后修复（新的编码活动）→ 再次检查（第 2 次，闭环核心）
+  ctx.listeners['session/event'](agent.session, toolEvent(4, 'edit'))   // 修复：edit
+  await fireTurnStopping(ctx, 1)              // 检查点 → 再检查
+  assert.equal(deps.calls.length, 2, '修复后应再次自动检查') // 第 2 次检查
+
+  // 同轮：没有新的编码活动（AI 只是说话）→ 不再重复检查（避免空转）
+  await fireTurnStopping(ctx, 1)              // 检查点 → 跳过
+  assert.equal(deps.calls.length, 2, '无新编码活动不应重复检查') // 仍为 2 次
+
+  // 同轮：再修复（第 3 次编码）→ 达到 maxAutoChecksPerPrompt 上限 → 不检查
+  ctx.listeners['session/event'](agent.session, toolEvent(5, 'write'))  // 再次修复
+  await fireTurnStopping(ctx, 1)              // 检查点 → 超上限跳过
+  assert.equal(deps.calls.length, 2, '超过上限后不再自动检查') // 仍为 2 次
+
+  // 新的用户消息 → 重置计数 → 第 2 轮编码后恢复检查
+  ctx.listeners['session/event'](agent.session, userEvent(6, '继续修复')) // 新用户消息
+  ctx.listeners['session/event'](agent.session, turnStartEvent(7, 2))     // 第 2 轮开始（重置本轮计数）
+  ctx.listeners['session/event'](agent.session, toolEvent(8, 'write'))    // 编码
+  await fireTurnStopping(ctx, 2)              // 检查点 → 恢复检查
+  assert.equal(deps.calls.length, 3, '新用户消息后应恢复自动检查') // 第 3 次检查
+})
+
+test('跟踪器：新轮次无编码活动不触发（本轮计数按轮次重置）', async () => {
+  const agent = makeAgent()                   // 假 agent
+  const ctx = makeFakeCtx(agent)              // 假 ctx
+  const deps = makeTrackerDeps()              // 假依赖
+  installTracker(ctx, deps)                   // 安装跟踪器
+
   ctx.listeners['session/event'](agent.session, userEvent(1, '需求'))   // 用户消息
   ctx.listeners['session/event'](agent.session, turnStartEvent(2, 1))   // 第 1 轮开始
   ctx.listeners['session/event'](agent.session, toolEvent(3, 'write'))  // 编码
-  await fireTurnStopping(ctx, 1)              // 第 1 次检查点 → 检查
-  await fireTurnStopping(ctx, 1)              // 同轮第 2 次检查点 → 不再检查
-  assert.equal(deps.calls.length, 1, '同一轮只应检查一次') // 只有 1 次
+  await fireTurnStopping(ctx, 1)              // 检查点 → 检查
+  assert.equal(deps.calls.length, 1, '第 1 轮应检查') // 第 1 次检查
 
-  // 第 2 轮：编码 → 检查（第 2 次，未超上限）
-  ctx.listeners['session/event'](agent.session, turnStartEvent(4, 2))   // 第 2 轮开始（重置编码计数）
-  ctx.listeners['session/event'](agent.session, toolEvent(5, 'write'))  // 编码
-  await fireTurnStopping(ctx, 2)              // 检查点 → 检查
-  assert.equal(deps.calls.length, 2, '第 2 轮应检查') // 第 2 次检查
-
-  // 第 3 轮：超过上限 → 不再检查
-  ctx.listeners['session/event'](agent.session, turnStartEvent(6, 3))   // 第 3 轮开始
-  ctx.listeners['session/event'](agent.session, toolEvent(7, 'write'))  // 编码
-  await fireTurnStopping(ctx, 3)              // 检查点 → 超上限不检查
-  assert.equal(deps.calls.length, 2, '超过上限后不再自动检查') // 仍为 2 次
-
-  // 新的用户消息 → 重置计数 → 第 4 轮恢复检查
-  ctx.listeners['session/event'](agent.session, userEvent(8, '继续修复')) // 新用户消息
-  ctx.listeners['session/event'](agent.session, turnStartEvent(9, 4))     // 第 4 轮开始
-  ctx.listeners['session/event'](agent.session, toolEvent(10, 'write'))   // 编码
-  await fireTurnStopping(ctx, 4)              // 检查点 → 恢复检查
-  assert.equal(deps.calls.length, 3, '新用户消息后应恢复自动检查') // 第 3 次检查
+  ctx.listeners['session/event'](agent.session, turnStartEvent(4, 2))   // 第 2 轮开始（无编码活动）
+  await fireTurnStopping(ctx, 2)              // 检查点 → 本轮无编码 → 跳过
+  assert.equal(deps.calls.length, 1, '无编码活动的轮次不应检查') // 仍为 1 次
 })
 
 test('跟踪器：配置关闭 autoCheck 时不触发', async () => {

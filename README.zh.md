@@ -35,7 +35,7 @@
 ### 触发方式（Harness 内）—— 双保险，两种方式同时生效
 
 - **方式一：追加系统提示词（只追加、绝不删除任何既有提示词）**。插件通过 systemPrompt.section 在系统提示词的“工具引导带”内追加一段说明（order 180，位于工具声明之后）：告诉 AI **“写完代码/项目后请主动调用 check_project 工具做全面检查，并依据报告修复所有问题，直到返回没有问题”**。这段文字是纯追加式注册，不修改、不覆盖任何原有提示词；随插件卸载自动移除。可通过配置 promptSection: false 关闭、promptSectionText 自定义文案。
-- **方式二：轮次关闭自动检查（兜底）**：即使 AI 忘了调用 check_project，插件也会在 AI 每轮编码（写文件/跑命令）结束的轮次关闭检查点（agent/turn-stopping，被机器 await 的串行检查点）**主动**执行三步检查并把报告回传 AI —— 报告保证在本轮边界提交前送达；每用户提示最多 2 次（防“检查-修复”死循环，可配置）。
+- **方式二：轮次关闭自动检查 + 自动修复闭环（兜底）**：即使 AI 忘了调用 check_project，插件也会在 AI 每轮编码（写文件/跑命令）结束的轮次关闭检查点（agent/turn-stopping，被机器 await 的串行检查点）**主动**执行三步检查并把报告 steer 回 AI（报告保证在本轮边界提交前送达，并附带“修复后再调用 check_project 验证”的指令）。AI 修复会产生新的编码活动，于是**下一次轮次关闭检查点会再次自动检查** —— 自动形成“检查 → 报告 → 修复 → 再检查”闭环，直到返回“没有问题”或达到每用户提示的上限（默认 6 次，防死循环，可配置）。
 - **/check 斜杠命令**：随时手动检查（可附加项目目录与需求文本）。
 - **check_project 模型工具**：AI 可主动调用，结果直接作为工具结果返回。
 - **GUI 面板**：浏览器打开 http://127.0.0.1:3080/code-checker/ 查看全部报告与截图产物（与 Web GUI 同源，无需额外端口）。
@@ -123,7 +123,7 @@
       config:
         enabled: true               # 是否启用插件
         autoCheck: true             # 编码轮次后自动检查
-        maxAutoChecksPerPrompt: 2   # 每用户提示的自动检查上限（防循环）
+        maxAutoChecksPerPrompt: 6   # 每用户提示的自动检查上限（修复-检查闭环的上限，防死循环）
         minCodingCalls: 1           # 触发检查所需的最小编码工具调用数
         codingTools: [write, edit, str-replace, read, run_code, bash, pwsh, terminal, todo_write, workflow, subagent, subagent_fork]
         installDeps: true           # 有锁文件且缺 node_modules 时安装依赖
@@ -207,7 +207,7 @@
     ├─ src/                     ── Harness 插件层（与 deepseek-harness 交互）──
     │  ├─ index.ts              插件入口 apply()：装配配置、跟踪器、命令、工具、GUI 与检查执行
     │  ├─ config.ts             插件配置 Schema（schemastery）+ 默认值（DEFAULT_CONFIG）
-    │  ├─ tracker.ts            会话跟踪器：统计编码活动、在 turn-stopping 检查点自动触发检查（防循环）
+    │  ├─ tracker.ts            会话跟踪器：统计编码活动、在 turn-stopping 检查点自动触发检查并支持“检查→修复→再检查”闭环（防循环上限）
     │  ├─ runner.ts             IO 适配器：把 ctx.shell / ctx.llm 适配成引擎的 exec/start/analyzer
     │  ├─ feedback.ts           报告回传：把报告文本以插件上下文消息 steer/inject 给 AI
     │  ├─ commands.ts           /check 斜杠命令（人机命令面，结果不进模型历史）
@@ -326,13 +326,13 @@
 ## 常见 Q&A
 
 **Q1. 安装后 AI 写代码了，为什么没有自动检查？**
-触发条件全部满足才检查：① 本轮有“编码工具调用”（write/edit/bash/pwsh/run_code 等，见 codingTools 配置）且次数 ≥ minCodingCalls；② 该会话是顶层（根）agent；③ autoCheck 为 true；④ 自上一次用户消息以来的自动检查次数未超过 maxAutoChecksPerPrompt。排查：dsh --profile web --dump-config 确认 code-checker 行存在、重启后观察控制台是否有 [dsh-code-checker] 日志。
+先确认插件真的被加载：**bundle 安装/更新后必须重启 dsh web**（插件行列表只在启动时读取，运行中的实例不会热加载新 bundle）。重启后控制台应出现 `[dsh-code-checker] dsh-code-checker 已加载…` 日志，浏览器打开 http://127.0.0.1:3080/code-checker/ 应看到检查面板。之后触发条件全部满足才检查：① 本轮有“编码工具调用”（write/edit/bash/pwsh/run_code 等，见 codingTools 配置）且次数 ≥ minCodingCalls；② 该会话是顶层（根）agent；③ autoCheck 为 true；④ 自上一次用户消息以来的自动检查次数未超过 maxAutoChecksPerPrompt。排查：dsh --profile web --dump-config 确认 code-checker 行存在。
 
 **Q2. 检查一次要多久？会不会卡住对话？**
 第 1 步受 buildTimeoutMs（默认 3 分钟）与 runProbeMs（默认 8 秒）约束；第 3 步每类模拟都有超时上限。自动检查在轮次关闭检查点（agent/turn-stopping）内同步执行，因此会延长“本轮结束”的边界一小段时间（通常数秒到 1 分钟）；若想完全不阻塞，可把 reportToAi 设为 inject 并手动触发。
 
 **Q3. 会不会陷入“检查-修复-再检查”死循环？**
-不会：每个用户提示最多自动检查 maxAutoChecksPerPrompt（默认 2）次，之后必须等新的用户消息才会恢复；同一轮只检查一次。
+不会，双重防护：① 只有“自上次检查之后产生了新的编码活动”才会再次自动检查（AI 修复代码 → 再检查一次；AI 只说话不写代码 → 不重复检查，避免空转）；② 每个用户提示最多自动检查 maxAutoChecksPerPrompt（默认 6）次，之后必须等新的用户消息才会恢复。AI 主动调用 check_project 工具不受此上限限制。
 
 **Q4. 检查报告在哪里能看到？**
 ① 直接回传给 AI（steer，AI 会收到并处理）；② GUI 面板 http://127.0.0.1:3080/code-checker/（历史报告、完整详情、模拟截图）；③ 控制台 [dsh-code-checker] 日志。

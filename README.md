@@ -13,7 +13,7 @@ See [README.zh.md](README.zh.md) for the full documentation (中文).
 **Triggers (inside Harness) — two methods, both active**:
 
 1. **Appended system-prompt section (primary; append-only, nothing existing is ever deleted or modified)**. The plugin registers a systemPrompt.section (order 180, inside the tool-guidance band) telling the AI to *call check_project after finishing code and keep fixing per the report until it returns "没有问题"*. Configurable via promptSection / promptSectionText; removed automatically when the plugin unloads.
-2. **Turn-stopping auto-check (fallback)**. Even if the AI forgets to call check_project, the plugin runs the three-step check itself at the turn-stopping checkpoint after coding turns and steers the report back to the AI (capped per user prompt to avoid loops).
+2. **Turn-stopping auto-check with fix-recheck loop (fallback)**. Even if the AI forgets to call check_project, the plugin runs the three-step check itself at the turn-stopping checkpoint after coding turns and steers the report back to the AI (with a "fix and re-verify" instruction). New coding activity from the fix triggers the next auto-check, forming an automatic check → report → fix → re-check loop until clean, capped per user prompt (default 6) to avoid loops.
 
 Plus the /check slash command, the check_project model tool, and the GUI dashboard at http://127.0.0.1:3080/code-checker/.
 
@@ -57,7 +57,7 @@ Override by row id in your profile's cordis.patch.yml (all fields have defaults,
     - id: code-checker
       config:
         autoCheck: true
-        maxAutoChecksPerPrompt: 2
+        maxAutoChecksPerPrompt: 6
         installDeps: true
         buildTimeoutMs: 180000
         runProbeMs: 8000
@@ -142,9 +142,9 @@ The LLM is the plugin's optional deep-analysis layer (steps 2 & 3 only; step 1 a
 
 ## FAQ
 
-- **AI wrote code but no auto-check ran?** All conditions must hold: the turn contained coding tool calls (write/edit/bash/pwsh/run_code, …) reaching minCodingCalls; the session is a top-level agent; autoCheck is true; auto-checks since the last user message are below maxAutoChecksPerPrompt. Check dsh --profile web --dump-config for the code-checker row and watch for [dsh-code-checker] logs.
+- **AI wrote code but no auto-check ran?** First confirm the plugin actually loaded: bundle installs take effect on the NEXT `dsh web` start (the plugin layer list is read at boot — a running instance never hot-loads a newly installed bundle). After restart you should see `[dsh-code-checker] dsh-code-checker loaded…` in the console and the dashboard at /code-checker/. Then all conditions must hold: the turn contained coding tool calls (write/edit/bash/pwsh/run_code, …) reaching minCodingCalls; the session is a top-level agent; autoCheck is true; auto-checks since the last user message are below maxAutoChecksPerPrompt. Check dsh --profile web --dump-config for the code-checker row and watch for [dsh-code-checker] logs.
 - **How long does a check take?** Step 1 is bounded by buildTimeoutMs (180s) and runProbeMs (8s); simulations have their own timeouts. The auto-check runs inside the turn-stopping checkpoint, so the turn boundary waits briefly (usually seconds to ~1 minute).
-- **Can it loop forever (check → fix → check)?** No: at most maxAutoChecksPerPrompt (default 2) auto-checks per user message; a new user message resets the counter; each turn is checked at most once.
+- **Can it loop forever (check → fix → check)?** No — two guards: a re-check only fires when new coding activity happened since the last check (the AI fixing code re-arms the check; talking without coding does not), and at most maxAutoChecksPerPrompt (default 6) auto-checks run per user message; a new user message resets the counter. Model-initiated check_project calls are not capped.
 - **Where do I see reports?** They are steered back to the AI, listed in the GUI at http://127.0.0.1:3080/code-checker/, and logged to the console.
 - **No Playwright installed?** Web simulation falls back to HTTP probes; the other steps are unaffected.
 - **Desktop simulation?** Windows only (UIA + real input events); other platforms skip with an explanation.

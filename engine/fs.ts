@@ -21,7 +21,7 @@ export const DEFAULT_SKIP_DIRS = new Set([
   'node_modules', '.git', '.hg', '.svn', 'dist', 'build', 'out', 'target',
   'venv', '.venv', '__pycache__', '.next', '.nuxt', '.cache', 'coverage',
   '.pytest_cache', '.mypy_cache', '.idea', '.vscode', '.DS_Store',
-  'playwright-report', 'test-results', '.artifacts',
+  'playwright-report', 'test-results', '.artifacts', '.dsh-test',
 ])
 
 /** 可采样的文本文件扩展名集合 —— 这些类型的文件内容会被读取用于关键词匹配。 */
@@ -101,7 +101,47 @@ export async function scanProject(
   return out
 }
 
-/** 在预算内采样文本文件内容（源码文件优先，README 也保留）。 */
+/** 源码扩展名权重（真正代码排前，README/需求文档权重低但单独提升，见 sampleRank）。 */
+const CODE_EXT_PRIORITY: Record<string, number> = {
+  '.ts': 10, '.js': 10, '.mjs': 10, '.py': 10, '.rs': 10, '.go': 10,
+  '.vue': 9, '.tsx': 9, '.jsx': 9, '.md': 1, '.txt': 1, '.json': 5,
+}
+
+/**
+ * 采样排序权重：实现源码目录优先，生成/重复产物（lib 的编译副本）与测试/示例靠后。
+ * 目的：字节预算有限时，把最可能“体现功能实现”的文件优先放进采样，
+ * 避免 lib/ 等编译副本（或字母序靠前的目录）先耗尽预算，导致真正的实现源码
+ * （如 src/tracker.ts）进不了分析样本，从而把已实现的功能误判为缺失。
+ */
+function sampleRank(rel: string): number {
+  const lower = rel.toLowerCase() // 小写化路径
+  const base = lower.split('/').pop() ?? '' // 取文件名
+  // 根目录的关键文档/配置（package.json、README、需求.txt、tsconfig 等）——
+  // 文件小、信息密度高，对第 2 步“需求核对”价值最大，给予最高优先级。
+  if (!lower.includes('/')
+    && /^(package\.json|readme[\w.-]*|需求[\w.-]*|requirements?[\w.-]*|tsconfig[\w.-]*|cordis\.[\w.-]+|dockerfile|compose\.[\w.-]+|\.env[\w.-]*)$/i.test(base)) {
+    return 30
+  }
+  let rank = CODE_EXT_PRIORITY[extname(lower)] ?? 4 // 基础权重：扩展名
+  // 实现源码目录加分（src/app 最高；engine/cli 及作为源码副本的 lib/src 次之）
+  if (lower.startsWith('src/') || lower.startsWith('app/')) rank += 10
+  else if (lower.startsWith('engine/') || lower.startsWith('cli/') || lower.startsWith('lib/src/')) rank += 6
+  else if (lower.startsWith('lib/')) rank -= 6 // 其余 lib 内容多为编译副本，靠后
+  // 测试与示例目录减分（仍有价值，但在实现源码之后）
+  if (/(^|\/)(tests?|__tests__|try_it_out|examples|spec|fixtures)\//.test(lower)) rank -= 4
+  return rank
+}
+
+/** 快速内容哈希（djb2）：用于跳过与已采样文件完全相同的重复副本（如 lib 编译产物）。 */
+function contentHash(text: string): number {
+  let hash = 5381 // djb2 初值
+  for (let i = 0; i < text.length; i++) { // 逐字符滚动
+    hash = ((hash << 5) + hash + text.charCodeAt(i)) | 0 // hash * 33 + 字符码（取 32 位）
+  }
+  return hash >>> 0 // 无符号化
+}
+
+/** 在预算内采样文本文件内容（实现源码优先、重复副本去重，README/需求文档保留）。 */
 export async function sampleFiles(
   files: FileEntry[],                                  // 待采样的文件清单
   maxFiles: number,                                    // 采样文件数上限
@@ -109,24 +149,21 @@ export async function sampleFiles(
   maxSingleFile = 120_000,                             // 单文件采样上限
 ): Promise<ProjectFiles> {
   const textFiles = files.filter(f => f.text && f.size > 0) // 只采样非空文本文件
-  // 源码优先排序：真正的代码排前面（按扩展名权重），README 权重最低但保留
-  const CODE_EXT_PRIORITY: Record<string, number> = {
-    '.ts': 10, '.js': 10, '.mjs': 10, '.py': 10, '.rs': 10, '.go': 10,
-    '.vue': 9, '.tsx': 9, '.jsx': 9, '.md': 1, '.txt': 1, '.json': 5,
-  }
-  /** 按“源码优先、同名按路径”排序后的文件列表。 */
+  /** 按“实现源码优先、重复副本去重、同名按路径”排序后的文件列表。 */
   const sorted = [...textFiles].sort((a, b) => {
-    const pa = CODE_EXT_PRIORITY[extname(a.rel).toLowerCase()] ?? 4 // a 的优先级
-    const pb = CODE_EXT_PRIORITY[extname(b.rel).toLowerCase()] ?? 4 // b 的优先级
-    return pb - pa || a.rel.localeCompare(b.rel)                    // 权重降序
+    return sampleRank(b.rel) - sampleRank(a.rel) || a.rel.localeCompare(b.rel) // 权重降序，同权重按路径
   })
   const samples = new Map<string, string>()            // 采样结果：路径 → 内容
+  const seenHashes = new Set<number>()                 // 已采样内容哈希（跳过内容完全相同的副本）
   let budget = maxBytes                                // 剩余字节预算
   for (const file of sorted.slice(0, maxFiles)) {      // 逐个采样（受文件数上限）
     if (budget <= 0) break                             // 预算耗尽即止
     try {
       const buf = await fsp.readFile(file.abs)         // 读取文件
       const text = buf.toString('utf8')                // 解码为 UTF-8
+      const hash = contentHash(text)                   // 内容哈希
+      if (seenHashes.has(hash)) continue               // 与已采样文件内容完全相同（编译副本）→ 跳过，省预算
+      seenHashes.add(hash)                             // 记录哈希
       const chunk = text.length > maxSingleFile        // 超长文件截断
         ? text.slice(0, maxSingleFile) + '\n...[文件过长，已截断]'
         : text
@@ -140,7 +177,7 @@ export async function sampleFiles(
     files,
     relSet: new Set(files.map(f => f.rel.toLowerCase())), // 相对路径集合（小写）
     samples,
-    samplingTruncated: budget <= 0 && samples.size < sorted.length, // 是否截断
+    samplingTruncated: budget <= 0,                    // 预算耗尽即视为截断（提示结论可能不完整）
     sampledBytes: maxBytes - Math.max(budget, 0),      // 实际采样字节
   }
 }

@@ -13,6 +13,6 @@
       # 默认配置即开箱即用；可按需覆盖（完整字段见 src/config.ts）：
       # config:
       #   autoCheck: true
-      #   maxAutoChecksPerPrompt: 2
+      #   maxAutoChecksPerPrompt: 6
       #   simulate: true
       #   gui: true

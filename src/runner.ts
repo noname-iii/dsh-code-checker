@@ -8,10 +8,10 @@
 import type { ShellExecutor, ShellExecRequest } from '@deepseek-ai/dsh-shell'
 // 引入 Agent 类型：代理对象
 import type { Agent } from '@deepseek-ai/dsh-agent'
+// 引入 randomUUID 函数：为手工构造的分析请求消息生成稳定 id
+import { randomUUID } from 'node:crypto'
 // 引入 LLM 运行时相关类型：LlmRuntime 与 GenerateOptions（生成选项）
-import type { LlmRuntime, GenerateOptions } from '@deepseek-ai/dsh-llm'
-// 引入 createUserMessage 工厂函数
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { LlmRuntime, GenerateOptions, Message } from '@deepseek-ai/dsh-llm'
 // 引入引擎类型：执行/启动/分析函数及各 IO 结构定义
 import type {
   AnalyzeFn, ExecFn, ExecOptions, EngineIo, RunningProcess, StartFn,
@@ -154,13 +154,17 @@ export function makeLlmAnalyzer(
   }
   // 返回异步分析函数
   return async (req, signal) => {
-    // 构造消息数组，先放入一条用户消息
-    const messages = [createUserMessage({
+    // 构造消息数组：手工构造一条用户消息（零依赖；与 createUserMessage 产物同形状）
+    const messages: Message[] = [{
+      // 稳定身份（每次分析请求一条新消息）
+      id: randomUUID(), // 随机 uuid
+      // 角色：用户
+      role: 'user', // 用户角色
       // 消息内容：单个文本块，内容为请求的提示词
-      content: [{ type: 'text', text: req.prompt }],
+      content: [{ type: 'text', text: req.prompt }], // 文本内容块
       // 消息来源：标记为插件来源
-      source: { kind: 'plugin', plugin: 'dsh-code-checker' },
-    })]
+      source: { kind: 'plugin', plugin: 'dsh-code-checker' }, // 插件来源
+    } as unknown as Message]
     // 构造生成选项
     const options: GenerateOptions = {
       // provider 名称

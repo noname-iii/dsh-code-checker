@@ -162,10 +162,10 @@ async function llmCheck( // 定义 LLM 深度核对函数
       .slice(0, 400) // 最多 400 个文件
       .map(f => f.rel + (f.size > 1024 ? ' (' + String(Math.round(f.size / 1024)) + 'KB)' : '')) // 文件名 + 可选大小标注
       .join('\n') // 用换行拼接
-    const samples = [...project.samples.entries()] // 构造源码采样文本
+    const samples = [...project.samples.entries()] // 构造源码采样文本（已按实现源码优先排序、重复副本去重）
       .map(([file, content]) => '=== ' + file + ' ===\n' + content) // 每个文件加标题分隔
       .join('\n\n') // 文件之间空行分隔
-      .slice(0, 60_000) // 截断到 60000 字符
+      .slice(0, 80_000) // 截断到 80000 字符（采样排序保证最前面的正是实现源码）
 
     const system = '你是资深软件测试工程师。用户提出了若干功能需求，下面是一个已完成的项目的文件清单与源码片段（可能被截断）。请逐条判断每个需求是否已实现。只能输出 JSON。' // 系统提示词
     const prompt = [ // 组装用户提示词

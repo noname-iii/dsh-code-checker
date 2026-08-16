@@ -14,7 +14,7 @@
       # 可选覆盖示例（完整字段与默认值见 src/config.ts）：
       # config:
       #   autoCheck: true            # 编码轮次后自动检查
-      #   maxAutoChecksPerPrompt: 2  # 防循环上限
+      #   maxAutoChecksPerPrompt: 6  # “检查→修复→再检查”闭环上限（防死循环）
       #   installDeps: true          # 有锁文件且缺 node_modules 时安装依赖
       #   buildTimeoutMs: 180000     # 构建超时
       #   runProbeMs: 8000           # 运行探针时长

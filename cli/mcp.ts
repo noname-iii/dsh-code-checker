@@ -25,6 +25,7 @@ import { runCheck } from '../engine/index.js'  // 导入引擎核心的检查函
 import type { CheckOptions } from '../engine/types.js'  // 导入引擎类型 CheckOptions（仅类型）
 import { makeExec, makeStart } from './exec.js'  // 导入进程适配器工厂函数
 import { makeOpenAiAnalyzer } from './llm.js'  // 导入 OpenAI 兼容 LLM 分析器工厂函数
+import { readPackageVersion } from './version.js'  // 导入版本号读取函数（唯一事实来源是 package.json）
 
 const TOOLS = [  // 定义 MCP 服务器对外暴露的工具列表
   {  // 第一个工具：check_project
@@ -53,7 +54,7 @@ const TOOLS = [  // 定义 MCP 服务器对外暴露的工具列表
 ]
 
 const CLIENT_NAME = 'dsh-code-checker'  // 定义客户端名称常量
-const CLIENT_VERSION = '0.1.0'  // 定义客户端版本号常量
+const CLIENT_VERSION = readPackageVersion()  // 客户端版本号（从 package.json 读取，与 CLI 保持一致）
 
 async function checkProject(args: Record<string, unknown>): Promise<string> {  // 执行项目检查的工具实现，返回渲染后的报告文本
   const platform: 'win32' | 'posix' = process.platform === 'win32' ? 'win32' : 'posix'  // 根据运行平台判定 win32 或 posix

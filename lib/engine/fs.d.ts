@@ -40,7 +40,7 @@ export interface ProjectFiles {
 export declare function scanProject(dir: string, // 要遍历的根目录
 skipDirs?: Set<string>, // 跳过的目录名集合（可覆盖）
 maxFiles?: number): Promise<FileEntry[]>;
-/** 在预算内采样文本文件内容（源码文件优先，README 也保留）。 */
+/** 在预算内采样文本文件内容（实现源码优先、重复副本去重，README/需求文档保留）。 */
 export declare function sampleFiles(files: FileEntry[], // 待采样的文件清单
 maxFiles: number, // 采样文件数上限
 maxBytes: number, // 采样总字节上限
