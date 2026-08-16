@@ -48,7 +48,7 @@
 
 ### 方式 1：从 GitHub 克隆（推荐给想自己发布/改代码的你）
 
-    git clone https://github.com/noname-iii/dsh-check-the-code dsh-code-checker
+    git clone https://github.com/noname-iii/dsh-code-checker dsh-code-checker
     cd dsh-code-checker
 
 > 克隆下来的项目**已附带构建好的 lib/ 产物**，无需安装任何依赖即可直接使用。
@@ -65,7 +65,7 @@
 
 ### 方式 3：GitHub 直装（免 clone）
 
-    dsh plugin --profile web add github:noname-iii/dsh-check-the-code
+    dsh plugin --profile web add github:noname-iii/dsh-code-checker
 
 > 首次 GitHub 直装时 pnpm ≥10 会要求允许运行 prepare 构建脚本：
 > 按提示把包名加入 profile 目录下 pnpm-workspace.yaml 的 allowBuilds 后重装即可。
