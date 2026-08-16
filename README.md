@@ -19,12 +19,12 @@ Plus the /check slash command, the check_project model tool, and the GUI dashboa
 
 ## Download
 
-    git clone <your-repo-url> dsh-code-checker
+    git clone https://github.com/noname-iii/dsh-check-the-code dsh-code-checker
     cd dsh-code-checker
 
 or install straight from GitHub / npm as a dsh bundle:
 
-    dsh plugin --profile web add github:you/dsh-code-checker
+    dsh plugin --profile web add github:noname-iii/dsh-check-the-code
     dsh plugin --profile web add dsh-code-checker                     # npm package
     dsh plugin --profile web add ./dsh-code-checker-<version>.tgz     # offline tarball
 
