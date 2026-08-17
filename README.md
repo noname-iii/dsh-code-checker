@@ -7,8 +7,8 @@ See [README.zh.md](README.zh.md) for the full documentation (中文).
 ## What it does
 
 1. **Build & run check** — detect the project type (Node/Python/Rust/Go/C++/Java/.NET/static web/Electron/desktop exe), install deps, run ALL build commands, start a run probe, and collect every error. Any error → report the specific error info to the AI immediately (with file:line locations where available) and list ALL collected errors at once (later steps are skipped).
-2. **Feature completeness** — extract ALL of the user's requirements from the prompt/context, then verify each one against the implementation (heuristic keyword/structure checks + optional LLM deep analysis). Missing features are collected and reported **all at once**; step 3 runs only when everything is implemented.
-3. **Real user simulation** — operate the software like a real user (keyboard, mouse clicks/drags): web apps via Playwright, Windows desktop apps via UIA with real input events, CLIs via driven commands — following the user's described features (or README.md). Freezes, unresponsiveness, errors and crashes are recorded and reported to the AI. If clean → return "没有问题" and let the AI continue.
+2. **Feature completeness** — extract ALL of the user's requirements from the prompt/context, then verify each one against the implementation (heuristic keyword/structure checks + optional LLM deep analysis). Missing features are collected and reported **all at once**; step 3 runs only when step 1 and step 2 both pass.
+3. **Real user simulation** — operate the software like a real user (keyboard, mouse clicks/drags): web apps (and any GUI project such as a DSH plugin panel) via HTTP probes + Playwright, Windows desktop apps via UIA with real input events, CLIs via driven commands — following the user's described features (or README.md). **Any project with a GUI (user interface) MUST run the GUI simulation when steps 1–2 pass** — a GUI project never falls back to CLI simulation. Freezes, unresponsiveness, errors and crashes are recorded and reported to the AI. If clean → return "没有问题" and let the AI continue.
 
 **Triggers (inside Harness) — two methods, both active**:
 

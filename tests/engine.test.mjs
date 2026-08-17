@@ -14,6 +14,10 @@ import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 /** 引入异步读文件（静态 Web 测试读取 index.html）。 */
 import { readFile } from 'node:fs/promises'
+/** 引入临时目录与写文件（GUI 项目测试里构造临时项目）。 */
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+/** 引入系统临时目录（GUI 项目测试的临时项目位置）。 */
+import { tmpdir } from 'node:os'
 /** 路径工具：join 拼接、dirname 取目录。 */
 import { join, dirname } from 'node:path'
 /** 把 import.meta.url 转成本地路径。 */
@@ -147,8 +151,7 @@ test('功能缺失项目：第 2 步一次性汇报所有缺失功能，第 3 �
   assert.ok(report.rendered.includes('登录') && report.rendered.includes('导出'), '报告应列出全部缺失功能') // 报告列出全部缺失
 })
 
-test('静态 Web 项目：HTTP 探针 + 浏览器模拟结果解析', async () => {
-  // 在测试进程内启动一个静态服务器（绕过子进程限制）
+test('静态 Web 项目：HTTP 探针 + 浏览器模拟结果解析', async () => {  // 在测试进程内启动一个静态服务器（绕过子进程限制）
   const server = createServer(async (req, res) => {
     const html = await readFile(join(fixtures, 'web-static', 'index.html')) // 读示例页面
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })      // 200 响应
@@ -235,4 +238,73 @@ test('模拟异常上报：卡顿/报错进入 anomalies 与 issues', async () =
   })
   assert.equal(report.ok, false, '--help 超时（无响应）应导致不通过') // 整体不通过
   assert.ok(report.anomalies.some(a => a.kind === 'unresponsive'), '应记录 unresponsive 异常') // 记录无响应异常
+})
+
+/** 构造一个“带 GUI 的 DSH 插件风格”临时项目（源码挂载 webServer 面板路由）。 */
+async function makeGuiProject() { // 创建带 GUI 的临时项目目录
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-cc-gui-')) // 临时目录
+  await writeFile(join(dir, 'package.json'), JSON.stringify({ name: 'gui-plugin', version: '1.0.0' }), 'utf8') // package.json（无 build 脚本，避免真实构建命令）
+  await writeFile(join(dir, 'index.js'), 'console.log("install ok") // install 函数入口\n', 'utf8') // 入口（含 install 痕迹，供第 2 步启发式核对）
+  await writeFile(join(dir, 'gui.js'), 'export function installGui() { webServer.register({ kind: "prefix", path: "/panel" }) }\n', 'utf8') // 面板挂载源码（GUI 证据 + 面板路径）
+  return dir // 返回临时目录
+}
+
+test('带 GUI 的插件项目：第 1、2 步通过后，第 3 步必须执行 GUI(web) 模拟而不是 CLI 模拟', async () => {
+  const dir = await makeGuiProject() // 建临时 GUI 项目
+  // 进程内起一个 web 服务占住候选端口（4173），供 HTTP 探针命中
+  const server = createServer((_req, res) => { res.writeHead(200, { 'content-type': 'text/html' }); res.end('<html><button>ok</button></html>') }) // 任意路径返回 200 页面
+  await new Promise((resolve) => server.listen(4173, '127.0.0.1', resolve)) // 监听 4173
+  try {
+    const io = makeIo([
+      {
+        match: (opts) => opts.command.includes('web-playwright.mjs'), // 浏览器模拟脚本
+        result: async () => ({ exitCode: 0, signal: null, timedOut: false, aborted: false,
+          stdout: 'RESULT:' + JSON.stringify({ ok: true, playwright: true, actions: [{ action: 'goto', target: '/panel', ok: true, durationMs: 80 }], consoleErrors: [], pageErrors: [], requestFailed: [], screenshots: [] }), stderr: '', durationMs: 200 }), // 模拟成功
+      },
+      {
+        match: (opts) => opts.command.includes('node "index.js"'), // 运行探针
+        result: async () => ({ exitCode: 0, signal: null, timedOut: false, aborted: false, stdout: 'install ok', stderr: '', durationMs: 5 }), // 正常退出
+      },
+    ])
+    const report = await runCheck({ // 跑检查（需求全部已实现）
+      projectDir: dir, // 临时项目目录
+      requirements: ['实现 install 函数'], // 需求：与 index.js 内容匹配
+      requirementText: '实现 install 函数', // 需求原文
+      installDeps: false, buildTimeoutMs: 60000, runProbeMs: 2000, simulate: true, runAllSteps: false, // 检查配置
+      useLlm: false, maxSampleFiles: 400, maxSampleBytes: 250000, language: 'zh', cleanMessage: '没有问题', // 检查配置
+    }, io)
+    assert.equal(report.steps[0].status, 'passed', '第 1 步应通过') // 第 1 步通过
+    assert.equal(report.steps[1].status, 'passed', '第 2 步应通过') // 第 2 步通过
+    assert.notEqual(report.steps[2].status, 'skipped', 'GUI 项目第 3 步不得跳过') // 第 3 步必须执行
+    const step3Detail = (report.steps[2].detail ?? []).join('\n') // 第 3 步明细
+    assert.ok(step3Detail.includes('模拟类型: web'), 'GUI 项目第 3 步必须走 web 模拟（实际: ' + step3Detail.slice(0, 80) + '）') // 必须 web 模拟
+    assert.ok(report.ok, '整体应通过（实际: ' + report.summary + '）') // 整体通过
+  } finally {
+    await new Promise((resolve) => server.close(resolve)) // 关闭测试服务器
+    await rm(dir, { recursive: true, force: true }) // 清理临时项目
+  }
+})
+
+test('带 GUI 的插件项目：第 2 步有缺失功能时，第 3 步仍按流程跳过（不强行执行）', async () => {
+  const dir = await makeGuiProject() // 建临时 GUI 项目
+  try {
+    const io = makeIo([
+      {
+        match: (opts) => opts.command.includes('node "index.js"'), // 运行探针
+        result: async () => ({ exitCode: 0, signal: null, timedOut: false, aborted: false, stdout: 'install ok', stderr: '', durationMs: 5 }), // 正常退出
+      },
+    ])
+    const report = await runCheck({ // 跑检查（需求缺失：与项目内容不匹配）
+      projectDir: dir, // 临时项目目录
+      requirements: ['支持数据导出为 CSV'], // 缺失需求
+      requirementText: '支持数据导出为 CSV', // 需求原文
+      installDeps: false, buildTimeoutMs: 60000, runProbeMs: 2000, simulate: true, runAllSteps: false, // 检查配置
+      useLlm: false, maxSampleFiles: 400, maxSampleBytes: 250000, language: 'zh', cleanMessage: '没有问题', // 检查配置
+    }, io)
+    assert.equal(report.steps[0].status, 'passed', '第 1 步应通过') // 第 1 步通过
+    assert.equal(report.steps[1].status, 'failed', '第 2 步应失败（功能缺失）') // 第 2 步失败
+    assert.equal(report.steps[2].status, 'skipped', '第 2 步有缺失时第 3 步按流程跳过') // 第 3 步跳过
+  } finally {
+    await rm(dir, { recursive: true, force: true }) // 清理临时项目
+  }
 })

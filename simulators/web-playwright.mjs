@@ -46,7 +46,25 @@ const isSelector = (target = '') =>
 
 const timeout = (action) => 8000                            // 每个动作的统一超时时间（毫秒）
 
-const browser = await chromium.launch({ headless: true })   // 以无头模式启动 Chromium 浏览器
+let browser                                                  // 浏览器实例（launch 失败时为 undefined）
+try {
+  browser = await chromium.launch({ headless: true })        // 以无头模式启动 Chromium 浏览器
+} catch (error) {
+  // Chromium 未安装（只有 playwright 包）时：优雅上报“未安装”，不崩溃（退出码 0）
+  console.log('RESULT:' + JSON.stringify({
+    ok: false,
+    playwright: false,
+    note: 'Chromium 未安装（npx playwright install chromium 后可用浏览器自动化）',
+    detail: String(error && error.message ? error.message : error),
+    actions: [],
+    consoleErrors: [],
+    pageErrors: [],
+    requestFailed: [],
+    screenshots: [],
+  }))
+  process.exit(0)
+}
+
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })   // 新建页面并设置视口尺寸
 page.on('console', (msg) => {                               // 监听浏览器控制台输出
   if (msg.type() === 'error') consoleErrors.push(msg.text().slice(0, 500))      // 仅记录 error 级日志（截取前 500 字符）

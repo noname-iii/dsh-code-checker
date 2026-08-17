@@ -10,6 +10,7 @@
  */
 import type { CheckOptions, EngineIo, StepResult } from './types.js';
 import type { ProjectInfo } from './detect.js';
+import type { ProjectFiles } from './fs.js';
 /** 模拟计划中的一次交互。 */
 export interface Interaction {
     action: 'goto' | 'click' | 'type' | 'press' | 'wait' | 'screenshot' | 'drag';
@@ -37,4 +38,5 @@ export declare function runStep3(// 定义第 3 步主函数
 sourceText: string, // 来源文本（用户需求与 README）
 projectInfo: ProjectInfo, // 项目信息
 opts: CheckOptions, // 检查配置
-io: EngineIo): Promise<StepResult>;
+io: EngineIo, // IO 适配器
+project?: ProjectFiles): Promise<StepResult>;

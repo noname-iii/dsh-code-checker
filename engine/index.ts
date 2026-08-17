@@ -1,14 +1,16 @@
 /**
  * 文件作用：dsh-code-checker 引擎入口 —— 组织并串联“三步流水线”检查：
  *   1. 编译运行检查 —— 有报错直接返回报错信息；
- *   2. 功能完整性核对 —— 全部缺失项一次性汇报，全部实现才进入第 3 步；
+ *   2. 功能完整性核对 —— 全部缺失项一次性汇报；
  *   3. 真实用户模拟 —— 记录卡顿/无响应/报错，无问题返回“没有问题”；
+ *      第 3 步在第 1、2 步都通过后执行；项目带 GUI（用户操作界面，含
+ *      DeepSeek Harness 插件面板）时必须走 GUI 模拟（web/桌面），CLI 项目走命令模拟。
  * 同时对外导出配置缺省值、配置合并函数、各子步骤函数、类型与工具函数。
  *
  * dsh-code-checker 引擎入口：三步流水线
  *   1. 编译运行检查 —— 有报错直接返回报错信息
- *   2. 功能完整性核对 —— 全部缺失项一次性汇报；全部实现才进入第 3 步
- *   3. 真实用户模拟 —— 记录卡顿/无响应/报错；无问题返回“没有问题”
+ *   2. 功能完整性核对 —— 全部缺失项一次性汇报
+ *   3. 真实用户模拟 —— 第 1、2 步通过后执行；有 GUI 的项目必须走 GUI 模拟
  * @module dsh-code-checker/engine
  */
 
@@ -143,10 +145,10 @@ export async function runCheck(opts: CheckOptions, io: EngineIo): Promise<CheckR
     steps.push(step2) // 记录跳过的第 2 步结果
   }
 
-  // ── 第 3 步：真实用户模拟（仅当全部需求实现时进行）──
+  // ── 第 3 步：真实用户模拟（第 1、2 步都通过后执行；有 GUI 的项目在 step3 内强制走 GUI 模拟）──
   const step2Clean = !step2 || step2.status !== 'failed' // 第 2 步是否“干净”（未失败或未执行）
   if (canProceed && step2Clean) { // 可继续且第 2 步干净时执行第 3 步
-    step3 = await runStep3(requirementText + '\n\n' + (readme ?? ''), projectInfo, opts, io) // 执行第 3 步（传入需求文本 + README）
+    step3 = await runStep3(requirementText + '\n\n' + (readme ?? ''), projectInfo, opts, io, project) // 执行第 3 步（传入需求文本 + README + 项目采样，供 GUI 判定）
     steps.push(step3) // 记录第 3 步结果
     for (const f of step3.findings) issues.push(f) // 把第 3 步的问题并入总问题列表
   } else if (canProceed && step2 && !step2Clean) { // 第 2 步有未实现/不完整功能时跳过第 3 步

@@ -208,7 +208,9 @@ async function main(): Promise<void> {  // CLI 主函数
   } else {  // 否则
     console.log(report.rendered)  // 输出渲染后的文本报告
   }
-  process.exit(report.ok ? 0 : 1)  // 根据报告结果设置退出码：无问题 0，有问题 1
+  // 根据报告结果设置退出码（优雅退出：不用 process.exit 强杀，
+  // 避免 undici/子进程等未收敛的 libuv 句柄在强制退出时触发 UV_HANDLE_CLOSING 断言崩溃）
+  process.exitCode = report.ok ? 0 : 1 // 无问题 0，有问题 1（事件循环自然排空后退出）
 }
 
 void main().catch((error) => {  // 调用主函数并捕获异常（void 忽略返回的 Promise）
