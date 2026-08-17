@@ -126,8 +126,11 @@ async function load() {
   try {
     const res = await fetch('/code-checker/api/reports')
     const items = await res.json()
+    // 记住当前滚动位置：刷新重建 DOM 前先记录，重建后恢复，避免“翻到底又跳回顶部”。
+    const scrollY = window.scrollY
     if (!items.length) {
       main.innerHTML = '<div class="empty">还没有检查记录。在会话中让 AI 写代码后会自动检查，或输入 /check 手动触发。</div>'
+      window.scrollTo(0, scrollY)
       return
     }
     // 记住用户已展开的“完整报告”详情（按报告 id），刷新后保持展开状态不回缩。
@@ -153,6 +156,8 @@ async function load() {
         '<details' + (wasOpen ? ' open' : '') + '><summary>完整报告</summary><pre>' + esc(detail.report ? detail.report.rendered : '') + '</pre></details>'
       main.appendChild(card)
     }
+    // 重建完成后再恢复滚动位置（此时新内容已铺好，页面高度与之前一致或更高）。
+    window.scrollTo(0, scrollY)
   } catch (err) {
     main.innerHTML = '<div class="empty">加载失败: ' + esc(String(err)) + '</div>'
   }

@@ -18,6 +18,8 @@ import { createServer } from 'node:http'
 import { installTracker } from '../lib/src/tracker.js'
 /** 引入被测试的 GUI 与报告仓库。 */
 import { installGui, ReportStore } from '../lib/src/gui.js'
+/** 引入被测试的审批通知工具函数。 */
+import { buildApprovalBody, sessionLabel, toolArgumentsFromSession } from '../lib/src/notify.js'
 
 /** 构造假 ctx：记录所有注册的监听器，并携带假 agents 服务。 */
 function makeFakeCtx(agent) {
@@ -238,4 +240,29 @@ test('GUI：路由挂载 + 面板与 API 渲染', async () => {
   } finally {
     await new Promise((resolve) => server.close(resolve)) // 关闭测试服务器
   }
+})
+
+test('审批通知：会话标识、命令反查与通知正文', () => {
+  // 会话带标题 → 用标题
+  const session = {
+    id: 'sess-abc123',
+    header: { cwd: 'D:\\work\\my-project' },
+    events: [
+      { type: 'session/title', data: { title: '修 bug 会话' } },
+      { type: 'tool/call', data: { callId: 'c1', name: 'bash', arguments: '{"command":"npm run build"}' } },
+    ],
+  }
+  assert.equal(sessionLabel(session), '修 bug 会话', '优先取会话标题') // 标题优先
+
+  const noTitle = { id: 'sess-xyz', header: { cwd: 'D:\\work\\my-project' }, events: [] }
+  assert.equal(sessionLabel(noTitle), 'my-project', '无标题时回退到 cwd 目录名') // 回退 cwd 目录名
+
+  assert.equal(toolArgumentsFromSession(session, 'c1'), 'npm run build', '按 callId 反查出具体命令') // 命令反查
+  assert.equal(toolArgumentsFromSession(session, 'nope'), undefined, 'callId 不匹配返回 undefined') // 不匹配返回 undefined
+
+  const body = buildApprovalBody('my-project', 'bash', 'npm run build') // 通知正文
+  assert.ok(body.includes('会话「my-project」'), '正文含会话名') // 会话名
+  assert.ok(body.includes('bash'), '正文含工具名') // 工具名
+  assert.ok(body.includes('npm run build'), '正文含具体命令') // 具体命令
+  assert.ok(body.includes('运行 / 不运行'), '正文含选项') // 选项
 })

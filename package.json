@@ -1,6 +1,6 @@
 {
   "name": "dsh-code-checker",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "DeepSeek Harness 浠ｇ爜鍏ㄩ潰妫€鏌ユ彃浠讹細涓夋娴佹按绾匡紙缂栬瘧杩愯妫€鏌?鈫?鍔熻兘瀹屾暣鎬ф牳瀵?鈫?鐪熷疄鐢ㄦ埛妯℃嫙娴嬭瘯锛夛紝鑷姩鎶婇棶棰樺弽棣堢粰 AI 淇锛屽彲閫夌敤 GUI锛屽苟闄勫甫閫傜敤浜?Trae/Qoder 绛夊钩鍙扮殑鐙珛 CLI 涓?MCP 鏈嶅姟",
   "keywords": ["deepseek-harness", "plugin", "code-check", "bug-check", "qa", "simulation", "mcp"],
   "type": "module",

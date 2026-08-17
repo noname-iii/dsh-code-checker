@@ -35,6 +35,8 @@ import { installCommand } from './commands.js'
 import { installTool } from './tool.js'
 // 导入 GUI 安装函数与报告存储类
 import { installGui, ReportStore } from './gui.js'
+// 导入审批系统通知安装函数
+import { installApprovalNotifier } from './notify.js'
 // 导入回传、修复指令与报告截断函数
 import { deliverToAgent, fixInstruction, truncateReport } from './feedback.js'
 // 导入引擎 IO、LLM 分析器与模型解析函数
@@ -168,6 +170,9 @@ export function apply(ctx: Context, config?: ConfigType): void { // 插件入口
     },
     log, // 传入日志函数
   })
+
+  // ── 审批系统通知（会话需要用户操作时弹桌面通知，不劫持决策）──
+  installApprovalNotifier(ctx, { enabled: config.notifyApprovals }, log) // 安装审批通知观察器
 
   // ── /check 命令 ──
   installCommand(ctx, { // 安装 /check 斜杠命令

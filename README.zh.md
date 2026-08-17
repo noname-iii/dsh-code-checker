@@ -39,13 +39,14 @@
 - **/check 斜杠命令**：随时手动检查（可附加项目目录与需求文本）。
 - **check_project 模型工具**：AI 可主动调用，结果直接作为工具结果返回。
 - **GUI 面板**：浏览器打开 http://127.0.0.1:3080/code-checker/ 查看全部报告与截图产物（与 Web GUI 同源，无需额外端口）。
+- **审批系统通知**：当某个会话需要用户操作（例如让用户决策是否运行某条命令）时，在 Windows/macOS/Linux **系统层面弹桌面通知**，通知含“哪个会话 + 具体命令 + 运行/不运行选项”，并原样把决定权交还给 Harness（绝不替你自动放行）。可用 `notifyApprovals: false` 关闭。
 
 ---
 
 ## 下载
 
-> **最新 release：v0.2.2**（已发布于 GitHub Releases，含离线 tarball 附件
-> `dsh-code-checker-0.2.2.tgz`）。下载地址：
+> **最新 release：v0.3.0**（已发布于 GitHub Releases，含离线 tarball 附件
+> `dsh-code-checker-0.3.0.tgz`）。下载地址：
 > https://github.com/noname-iii/dsh-code-checker/releases/latest
 > 已经安装过旧版本？见下方 [FAQ](#常见-qa) 第 15 条（无需重新克隆，重装/更新即可）。
 
@@ -65,7 +66,7 @@
     dsh plugin --profile web add dsh-code-checker
 
     # 或下载最新 release 附件（离线分发，无需 clone、无需打包）
-    dsh plugin --profile web add ./dsh-code-checker-0.2.2.tgz
+    dsh plugin --profile web add ./dsh-code-checker-0.3.0.tgz
 
     # 或从本目录自己打 tarball 再安装
     pnpm pack                     # 生成 dsh-code-checker-<版本>.tgz
@@ -133,7 +134,7 @@
         autoCheck: true             # 编码轮次后自动检查
         maxAutoChecksPerPrompt: 6   # 每用户提示的自动检查上限（修复-检查闭环的上限，防死循环）
         minCodingCalls: 1           # 触发检查所需的最小编码工具调用数
-        codingTools: [write, edit, str-replace, read, run_code, bash, pwsh, terminal, todo_write, workflow, subagent, subagent_fork]
+        codingTools: [write, edit, str-replace, run_code, bash, pwsh, terminal, workflow, subagent, subagent_fork]
         installDeps: true           # 有锁文件且缺 node_modules 时安装依赖
         buildTimeoutMs: 180000      # 构建超时（毫秒）
         runProbeMs: 8000            # 运行探针时长（毫秒）
@@ -149,7 +150,8 @@
         maxSampleFiles: 400         # 源码采样文件数上限
         artifactDir: ''             # 模拟产物目录（空=系统临时目录）
         defaultDir: ''              # 会话无 cwd 时的默认检查目录（空=进程目录）
-        promptSection: true          # 是否追加“写完代码后主动调用 check_project”提示词段（只追加不删除）
+        promptSection: true         # 是否追加“写完代码后主动调用 check_project”提示词段（只追加不删除）
+        notifyApprovals: true       # 会话需要用户操作时在系统层面发桌面通知（含会话/命令/选项）
         promptSectionText: 你完成代码/项目的编写或修改后，请主动调用 check_project 工具对当前项目做一次全面检查；收到检查报告后，请修复报告中的所有问题（编译错误、缺失功能、卡顿/报错等），修复后再调用一次 check_project 直到返回“没有问题”。 # 提示词段内容
 
 ---
@@ -383,6 +385,15 @@ LLM 可用且 useLlm 开启时以 LLM 结论为准（启发式作为旁证与回
 - 第 2 步启发式结论是“痕迹级”证据（关键词/文件名匹配），适合快速筛查；深度判定请保持 useLlm 开启。
 - 桌面模拟仅 Windows；Web 模拟依赖 Playwright（缺省回退 HTTP 探针）。
 - 报告回传走会话的插件上下文消息（steer/inject），不会以“用户”身份污染对话记录。
+- 审批系统通知是**只读旁观**：它只通知你“有会话需要你决策”，不代你选择“运行/不运行”——最终决定仍在 Harness 的审批界面里由你做出。
+
+## 安全说明
+
+- **零外部运行时依赖**：插件运行时代码只 import `node:*` 内置模块，不引入第三方库，供应链攻击面最小。
+- **不联网、不上传**：插件的检查都在本地完成；报告只回传给当前会话的 AI，不发往任何外部服务（第 2/3 步可选 LLM 分析走的是**你当前会话已有的模型**，不会额外泄露数据）。
+- **不劫持审批**：审批通知观察器在 `approval/request` waterfall 里发完通知后原样 `next()`，把决定权交还 Harness，绝不自动放行任何命令。
+- **命令无 shell 注入**：引擎执行构建/运行命令、通知调用系统命令时，一律用参数数组方式调用（不经过 shell 拼接）；通知文本只作为参数传递并做了转义/截断。
+- **权限边界**：插件只读项目文件、运行项目声明的构建/运行命令（这是它作为代码检查器的本职）；不做任何与检查无关的系统级写操作。
 
 ## License
 

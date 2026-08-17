@@ -15,11 +15,11 @@ See [README.zh.md](README.zh.md) for the full documentation (中文).
 1. **Appended system-prompt section (primary; append-only, nothing existing is ever deleted or modified)**. The plugin registers a systemPrompt.section (order 180, inside the tool-guidance band) telling the AI to *call check_project after finishing code and keep fixing per the report until it returns "没有问题"*. Configurable via promptSection / promptSectionText; removed automatically when the plugin unloads.
 2. **Turn-stopping auto-check with fix-recheck loop (fallback)**. Even if the AI forgets to call check_project, the plugin runs the three-step check itself at the turn-stopping checkpoint after coding turns and steers the report back to the AI (with a "fix and re-verify" instruction). New coding activity from the fix triggers the next auto-check, forming an automatic check → report → fix → re-check loop until clean, capped per user prompt (default 6) to avoid loops.
 
-Plus the /check slash command, the check_project model tool, and the GUI dashboard at http://127.0.0.1:3080/code-checker/.
+Plus the /check slash command, the check_project model tool, the GUI dashboard at http://127.0.0.1:3080/code-checker/, and **OS-level approval notifications**: when a session needs user action (e.g. deciding whether to run a command), the plugin pops a system notification on Windows/macOS/Linux showing which session, the specific command, and the run/don't-run options — while always handing the actual decision back to the Harness approval UI (`notifyApprovals: false` to disable).
 
 ## Download
 
-> **Latest release: v0.2.2** — published on GitHub Releases with an offline tarball asset `dsh-code-checker-0.2.2.tgz`: https://github.com/noname-iii/dsh-code-checker/releases/latest
+> **Latest release: v0.3.0** — published on GitHub Releases with an offline tarball asset `dsh-code-checker-0.3.0.tgz`: https://github.com/noname-iii/dsh-code-checker/releases/latest
 
     git clone https://github.com/noname-iii/dsh-code-checker dsh-code-checker
     cd dsh-code-checker
@@ -28,7 +28,7 @@ or install straight from GitHub / npm / the release tarball as a dsh bundle:
 
     dsh plugin --profile web add github:noname-iii/dsh-code-checker
     dsh plugin --profile web add dsh-code-checker                     # npm package
-    dsh plugin --profile web add ./dsh-code-checker-0.2.2.tgz         # offline (release asset)
+    dsh plugin --profile web add ./dsh-code-checker-0.3.0.tgz         # offline (release asset)
 
 The repository ships prebuilt lib/ artifacts — no dependencies or TypeScript needed to use it. Cloning/downloading to any directory works as-is.
 
@@ -69,6 +69,14 @@ Override by row id in your profile's cordis.patch.yml (all fields have defaults,
         gui: true
         language: zh
         cleanMessage: 没有问题
+        notifyApprovals: true   # OS notification when a session needs user action
+
+## Security
+
+- Zero runtime dependencies (only `node:*` builtins) — minimal supply-chain surface.
+- No network egress: checks run locally; reports go only to the current session's AI (optional step 2/3 LLM analysis reuses your session's own model).
+- The approval notifier only OBSERVES `approval/request` and delegates with `next()` — it never auto-approves a command.
+- Build/run commands and OS notification commands are invoked via argument arrays (no shell interpolation); notification text is escaped and truncated.
 
 ## Other platforms (Trae / Qoder / Cursor / Claude Desktop)
 

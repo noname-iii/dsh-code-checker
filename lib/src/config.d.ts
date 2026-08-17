@@ -55,6 +55,8 @@ export interface Config {
     promptSection: boolean;
     /** 提示词段内容（追加到系统提示词尾部，可自定义）。 */
     promptSectionText: string;
+    /** 当某会话需要用户操作（审批/决策是否运行命令）时，是否在系统层面发桌面通知（Windows/macOS/Linux）。 */
+    notifyApprovals: boolean;
 }
 /** 默认配置（同时是校验器合并缺失字段的基底）。 */
 export declare const DEFAULT_CONFIG: Config;
