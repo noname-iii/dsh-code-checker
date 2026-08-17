@@ -82,8 +82,16 @@ if (!typecheckOnly && !force && tsc && libIsFresh()) {
 }
 
 if (!tsc) {                                                // 找不到 tsc
-  if (!typecheckOnly && libIsFresh()) {                    // lib 可用 → 只告警
-    console.warn('[build] 未找到 TypeScript，但 lib/ 产物已是最新，跳过构建（正常安装无需 TypeScript）。')
+  // 发布包可移植性关键：git clone/checkout 写文件的 mtime 顺序不保证 lib 比源码新，
+  // 因此在“没有 TypeScript 的用户机器”上，只要 lib 产物存在就跳过构建——
+  // 不依赖 mtime 新鲜度（那是开发机上的增量判断）。
+  const artifactsExist = () => [                          // lib 产物存在性判断
+    join(pkgRoot, 'lib', 'src', 'index.js'),
+    join(pkgRoot, 'lib', 'engine', 'index.js'),
+    join(pkgRoot, 'lib', 'cli', 'index.js'),
+  ].every(p => existsSync(p))
+  if (!typecheckOnly && artifactsExist()) {               // 产物存在 → 只告警并继续（正常安装无需 TypeScript）
+    console.warn('[build] 未找到 TypeScript，但 lib/ 产物已存在，跳过构建（正常安装无需 TypeScript）。')
     process.exit(0)
   }
   console.error('[build] 找不到 TypeScript (tsc.js)。')     // lib 缺失 → 报错指引

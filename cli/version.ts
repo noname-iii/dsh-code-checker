@@ -8,13 +8,14 @@
 import { readFileSync } from 'node:fs'  // 从 Node 内置 fs 导入 readFileSync：同步读取文件
 import { fileURLToPath } from 'node:url'  // 从 node:url 导入 fileURLToPath：把文件 URL 转成路径
 
-/** 从本包 package.json 读取版本号（dev 源码与发布 lib 两种层级都兼容）。 */
+/** 从本包 package.json 读取版本号（dev 源码与发布 lib 两种层级都兼容；容忍 BOM）。 */
 export function readPackageVersion(): string {  // 导出读取版本号函数
   // 候选路径：发布包（lib/cli → ../../package.json）与源码开发（cli → ../package.json）
   const candidates = [new URL('../../package.json', import.meta.url), new URL('../package.json', import.meta.url)]  // 两种层级
   for (const url of candidates) {  // 逐个尝试
     try {  // 受保护的读取与解析
-      const pkg = JSON.parse(readFileSync(fileURLToPath(url), 'utf8')) as { name?: unknown; version?: unknown }  // 解析 package.json
+      const text = readFileSync(fileURLToPath(url), 'utf8').replace(/^\uFEFF/, '')  // 读取并剥掉可能的 UTF-8 BOM（PowerShell 等工具可能写入）
+      const pkg = JSON.parse(text) as { name?: unknown; version?: unknown }  // 解析 package.json
       if (pkg.name === 'dsh-code-checker' && typeof pkg.version === 'string' && pkg.version) return pkg.version  // 匹配本包名且版本号合法
     } catch {
       // 候选不存在或无法解析 → 尝试下一个

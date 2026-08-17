@@ -44,6 +44,11 @@
 
 ## 下载
 
+> **最新 release：v0.2.2**（已发布于 GitHub Releases，含离线 tarball 附件
+> `dsh-code-checker-0.2.2.tgz`）。下载地址：
+> https://github.com/noname-iii/dsh-code-checker/releases/latest
+> 已经安装过旧版本？见下方 [FAQ](#常见-qa) 第 15 条（无需重新克隆，重装/更新即可）。
+
 三种方式任选：
 
 ### 方式 1：从 GitHub 克隆（推荐给想自己发布/改代码的你）
@@ -54,12 +59,15 @@
 > 克隆下来的项目**已附带构建好的 lib/ 产物**，无需安装任何依赖即可直接使用。
 > 若你在 GitHub 上 release 了源码包，下载解压到任意目录后同样直接可用。
 
-### 方式 2：npm / tarball 安装（作为 dsh 插件束）
+### 方式 2：npm / tarball 安装（作为 dsh 插件束，推荐）
 
     # 直接安装 npm 包
     dsh plugin --profile web add dsh-code-checker
 
-    # 或从本目录打 tarball 再安装（离线分发）
+    # 或下载最新 release 附件（离线分发，无需 clone、无需打包）
+    dsh plugin --profile web add ./dsh-code-checker-0.2.2.tgz
+
+    # 或从本目录自己打 tarball 再安装
     pnpm pack                     # 生成 dsh-code-checker-<版本>.tgz
     dsh plugin --profile web add ./dsh-code-checker-<版本>.tgz
 
@@ -366,6 +374,9 @@ Web 模拟自动回退为 HTTP 探针（检测首页响应时间与状态码）�
 
 **Q14. 启发式判断和 LLM 判断以谁为准？**
 LLM 可用且 useLlm 开启时以 LLM 结论为准（启发式作为旁证与回退）；纯启发式模式下结论偏保守，可能把“在注释/字符串里被提及但未真正实现”的功能误判为已实现 —— 这是启发式的固有权衡。
+
+**Q15. 我已经安装过这个插件，还需要重新下载吗？**
+通常不需要重新下载：本插件**零外部运行时依赖**，已安装的目录可以直接用 `git pull`（克隆安装）或重新执行 `dsh plugin add` 指向最新版本来更新。只有当你想用 GitHub release 附带的离线 tarball（适合无法访问 GitHub 的机器）时才需要下载 `dsh-code-checker-<版本>.tgz` 并重装。更新后**重启 dsh web** 生效（插件行列表只在启动时读取）。本地与最新 release 是否一致，可对比目录里 `package.json` 的 `version` 与 https://github.com/noname-iii/dsh-code-checker/releases/latest 的版本号。
 
 ## 已知边界
 

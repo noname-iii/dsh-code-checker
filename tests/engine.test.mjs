@@ -78,6 +78,13 @@ test('需求提取：从中文文本解析出需求条目', () => {
   assert.ok(reqs.some(r => r.includes('greet')), '应提取 greet 需求') // 英文命令应被提取
 })
 
+test('需求提取：纯提问句不进需求，带需求动词的问句保留，版本号不被切分', () => {
+  const reqs = extractRequirements('那么我现在还要重新下载吗？\n能支持导出CSV吗？\n请修改，并提交到Github再发一个release版本号v0.2.2') // 混合提问与需求
+  assert.ok(!reqs.some(r => r.includes('重新下载吗')), '纯提问句不应进入需求列表') // 提问句过滤
+  assert.ok(reqs.some(r => r.includes('支持导出CSV')), '含需求动词（支持）的问句应保留为需求') // 问句保留
+  assert.ok(reqs.some(r => r.includes('v0.2.2')), '版本号 0.2.2 不应被句点切分（实际: ' + reqs.join(' | ') + '）') // 小数不被切开
+})
+
 test('关键词提取：中文产生 2-gram，英文产生单词', () => {
   const zh = extractTerms('支持用户登录与数据导出')  // 中文需求
   assert.ok(zh.some(t => t.includes('登录') || t === '登录' || t.includes('用户')), '中文词命中') // 应含登录/用户

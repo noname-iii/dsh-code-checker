@@ -4,5 +4,5 @@
  * 读取失败时回退到 '0.0.0'（不影响功能，仅用于展示）。
  * @module dsh-code-checker/cli/version
  */
-/** 从本包 package.json 读取版本号（dev 源码与发布 lib 两种层级都兼容）。 */
+/** 从本包 package.json 读取版本号（dev 源码与发布 lib 两种层级都兼容；容忍 BOM）。 */
 export declare function readPackageVersion(): string;

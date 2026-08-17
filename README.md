@@ -19,14 +19,16 @@ Plus the /check slash command, the check_project model tool, and the GUI dashboa
 
 ## Download
 
+> **Latest release: v0.2.2** — published on GitHub Releases with an offline tarball asset `dsh-code-checker-0.2.2.tgz`: https://github.com/noname-iii/dsh-code-checker/releases/latest
+
     git clone https://github.com/noname-iii/dsh-code-checker dsh-code-checker
     cd dsh-code-checker
 
-or install straight from GitHub / npm as a dsh bundle:
+or install straight from GitHub / npm / the release tarball as a dsh bundle:
 
     dsh plugin --profile web add github:noname-iii/dsh-code-checker
     dsh plugin --profile web add dsh-code-checker                     # npm package
-    dsh plugin --profile web add ./dsh-code-checker-<version>.tgz     # offline tarball
+    dsh plugin --profile web add ./dsh-code-checker-0.2.2.tgz         # offline (release asset)
 
 The repository ships prebuilt lib/ artifacts — no dependencies or TypeScript needed to use it. Cloning/downloading to any directory works as-is.
 
@@ -152,6 +154,7 @@ The LLM is the plugin's optional deep-analysis layer (steps 2 & 3 only; step 1 a
 - **Token cost?** Only with useLlm enabled; disable it for zero LLM cost.
 - **Uninstall / disable?** dsh plugin --profile web remove dsh-code-checker removes the bundle; enabled: false or removing the row disables it; autoCheck: false keeps /check and check_project available.
 - **Not working after install?** Verify the row with dsh --profile web --dump-config | findstr code-checker, restart dsh web, check console logs, and confirm the session cwd is the project you expect (the check targets the session cwd).
+- **Already installed — do I need to re-download?** Usually not: the plugin has zero runtime dependencies, so a git pull (clone installs) or re-running `dsh plugin add` with the new version updates in place; the release tarball is only for offline machines. Compare package.json's `version` against https://github.com/noname-iii/dsh-code-checker/releases/latest, and restart dsh web after updating.
 - **Quick sanity check?** Run try_it_out/run-tests.ps1 (or .sh): healthy → "没有问题", broken build → error report, missing features → all missing features listed at once.
 - **Port conflicts?** The web simulation only probes local loopback ports (5173/3000/8080/4173, …) and never binds them.
 - **Heuristic vs LLM verdicts?** LLM wins when available (heuristic as fallback/corroboration); heuristic-only mode is intentionally conservative and may treat a feature merely mentioned in comments/strings as implemented.
