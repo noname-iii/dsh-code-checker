@@ -192,6 +192,49 @@ test('静态 Web 项目：HTTP 探针 + 浏览器模拟结果解析', async () =
   }
 })
 
+test('静态 Web 项目：逐页审计（卡“加载中”）与点击所有按钮的异常上报', async () => {  // 第 3 步新增能力
+  const server = createServer(async (req, res) => {
+    const html = await readFile(join(fixtures, 'web-static', 'index.html')) // 读示例页面
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })      // 200 响应
+    res.end(html)                                                           // 返回页面
+  })
+  await new Promise((resolve) => server.listen(4173, '127.0.0.1', resolve)) // 监听 4173 端口
+  try {
+    const io = makeIo([
+      {
+        match: (opts) => opts.command.includes('web-playwright.mjs'), // 浏览器模拟命令
+        result: async () => ({
+          exitCode: 0, signal: null, timedOut: false, aborted: false,
+          stdout: 'RESULT:' + JSON.stringify({                    // 模拟 Playwright 结果（含逐页审计与按钮点击）
+            ok: true, playwright: true,
+            actions: [{ action: 'goto', target: '/', ok: true, durationMs: 120 }], // 计划操作成功
+            consoleErrors: [], pageErrors: [], requestFailed: [], screenshots: [], // 无控制台/页面错误
+            pageChecks: [                                          // 逐页审计：发现一个页面卡在“加载中”
+              { url: 'http://127.0.0.1:4173/', title: 'demo', ok: false, stuckLoading: true, note: '页面持续显示加载指示: 加载中' },
+            ],
+            buttonClicks: [                                        // 点击所有按钮：发现一个按钮点击后卡在加载中
+              { url: 'http://127.0.0.1:4173/', text: '提交', ok: false, error: '点击后页面持续显示加载指示: 加载中' },
+              { url: 'http://127.0.0.1:4173/', text: '重置', ok: true },
+            ],
+          }),
+          stderr: '', durationMs: 200,
+        }),
+      },
+    ])
+    const report = await runCheck(baseOptions('web-static', [    // 静态站 + 三条已实现需求
+      '页面包含一个问候按钮',
+      '页面包含名字输入框',
+      '点击按钮后显示问候语',
+    ]), io)
+    assert.equal(report.ok, false, '卡在加载中应导致不通过')       // 整体不通过
+    assert.ok(report.anomalies.some(a => a.kind === 'freeze' && a.where.includes('加载中')), '应记录“卡在加载中”的 freeze 异常') // 页面卡加载异常
+    assert.ok(report.anomalies.some(a => a.kind === 'unresponsive' && a.where.includes('提交')), '应记录按钮点击无响应异常') // 按钮点击异常
+    assert.ok(report.rendered.includes('加载中'), '报告应包含“加载中”证据') // 报告含证据
+  } finally {
+    await new Promise((resolve) => server.close(resolve))        // 关闭测试服务器
+  }
+})
+
 test('第 1、2 步都过、只有第 3 步模拟出错：记录异常并汇报（broken-cli）', async () => {
   const io = makeIo([
     {

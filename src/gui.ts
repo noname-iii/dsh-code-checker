@@ -397,7 +397,7 @@ function renderCommands(commands) {
     var c = commands[i]
     var exitText = c.exitCode === null ? '后台启动/运行中' : ('退出码 ' + c.exitCode)
     var exitCls = c.exitCode === 0 ? 'cmd-ok' : (c.exitCode === null ? 'cmd-run' : 'cmd-err')
-    var output = (c.stdout || '') + (c.stderr ? ((c.stdout ? '\n' : '') + c.stderr) : '')
+    var output = (c.stdout || '') + (c.stderr ? ((c.stdout ? '\\n' : '') + c.stderr) : '')
     out += '<div class="cmd">' +
       '<div class="cmd-line"><span class="prompt">$</span> ' + esc(c.command) + ' <span class="cmd-exit ' + exitCls + '">' + esc(exitText) + '</span></div>' +
       (output ? '<pre class="cmd-out">' + esc(output) + '</pre>' : '') +
@@ -445,7 +445,7 @@ function renderOps(ops) {
 
 function renderLogs(logs) {
   if (!logs || !logs.length) return '<div class="empty">（无日志）</div>'
-  return '<pre class="log">' + esc(logs.join('\n')) + '</pre>'
+  return '<pre class="log">' + esc(logs.join('\\n')) + '</pre>'
 }
 
 function refresh() {
