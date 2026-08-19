@@ -4,9 +4,12 @@
  * 文件作用：用 Playwright 驱动无头 Chromium，按计划文件中的 interactions 依次执行网页交互
  *          （goto/click/type/press/wait/drag/screenshot），并采集控制台错误、页面异常、
  *           失败请求与截图，最后输出一行 RESULT:{...}（JSON）供引擎解析。
+ * 新增能力：① 逐页审计——对访问到的每个页面检查是否一直卡在某个页面、或卡在“加载中”
+ *           （加载指示持续出现即判定卡在加载中）；② 遍历点击页面上所有按钮——逐个点击
+ *           每个可点击按钮并记录点击后的状态/异样（报错、卡在加载中等）。
  * 用法: node web-playwright.mjs <planFile>
- * planFile: { baseUrl, interactions: [{action,target,value,expect}], artifacts }
- * 输出: 日志若干行 + 一行 RESULT:{...}（JSON），供引擎解析。
+ * planFile: { baseUrl, interactions: [{action,target,value,expect}], artifacts, audit }
+ * 输出: 日志若干行 + 一行 RESULT:{...}（JSON，含 pageChecks 逐页审计结果、buttonClicks 按钮点击结果）。
  */
 import { readFile } from 'node:fs/promises'
 

@@ -8,7 +8,7 @@ See [README.zh.md](README.zh.md) for the full documentation (中文).
 
 1. **Build & run check** — detect the project type (Node/Python/Rust/Go/C++/Java/.NET/static web/Electron/desktop exe), install deps, run ALL build commands, start a run probe, and collect every error. Any error → report the specific error info to the AI immediately (with file:line locations where available) and list ALL collected errors at once (later steps are skipped).
 2. **Feature completeness** — extract ALL of the user's requirements from the prompt/context, then verify each one against the implementation (heuristic keyword/structure checks + optional LLM deep analysis + **behavioral verification: open the project like a real user — web via Playwright-rendered page text, CLI via --help/--version output — and check whether the required feature is actually visible**). Missing features are collected and reported **all at once**; step 3 runs only when step 1 and step 2 both pass.
-3. **Real user simulation** — operate the software like a real user (keyboard, mouse clicks/drags): web apps (and any GUI project such as a DSH plugin panel) via HTTP probes + Playwright, Windows desktop apps via UIA with real input events, CLIs via driven commands — following the user's described features (or README.md). **Any project with a GUI (user interface) MUST run the GUI simulation when steps 1–2 pass** — a GUI project never falls back to CLI simulation. Freezes, unresponsiveness, errors and crashes are recorded and reported to the AI. If clean → return "没有问题" and let the AI continue.
+3. **Real user simulation** — operate the software like a real user (keyboard, mouse clicks/drags): web apps (and any GUI project such as a DSH plugin panel) via HTTP probes + Playwright, Windows desktop apps via UIA with real input events, CLIs via driven commands — following the user's described features (or README.md). For web/GUI projects the simulator also **audits every page it reaches** (detecting pages stuck on a URL or stuck on a "loading" indicator) and **clicks every button on each page** (recording the state/any anomaly after each click). **Any project with a GUI (user interface) MUST run the GUI simulation when steps 1–2 pass** — a GUI project never falls back to CLI simulation. Freezes, unresponsiveness, errors and crashes are recorded and reported to the AI. If clean → return "没有问题" and let the AI continue.
 
 **Triggers (inside Harness) — two methods, both active**:
 
@@ -286,7 +286,7 @@ As requested, the plugin verifies itself: tsc typecheck + build (step 1), featur
 The LLM is the plugin's optional deep-analysis layer (steps 2 & 3 only; step 1 and the actual simulation execution never use it):
 
 - Step 2: an LLM judges each requirement as implemented/partial/missing with evidence and fix suggestions (more accurate than the heuristic fallback).
-- Step 3: an LLM can draft the simulation plan (which button to click, what to type, what to expect).
+- Step 3: an LLM can draft the simulation plan (which button to click, what to type, what to expect). Without an LLM, the built-in default plan still runs the planned interactions, then audits every page (stuck-on-page / stuck-on-"loading" detection) and clicks every button on each page.
 
 **API key by usage scenario:**
 
