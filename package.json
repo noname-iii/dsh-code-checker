@@ -1,6 +1,6 @@
 {
   "name": "dsh-code-checker",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "DeepSeek Harness 代码全面检查插件：三步流水线（编译运行检查 → 功能完整性核对 → 真实用户模拟测试），自动把问题反馈给 AI 修复，可选用 GUI，并附带适用于 Trae/Qoder 等平台的独立 CLI 与 MCP 服务",
   "keywords": ["deepseek-harness", "plugin", "code-check", "bug-check", "qa", "simulation", "mcp"],
   "type": "module",

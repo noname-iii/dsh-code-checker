@@ -7,7 +7,7 @@ See [README.zh.md](README.zh.md) for the full documentation (中文).
 ## What it does
 
 1. **Build & run check** — detect the project type (Node/Python/Rust/Go/C++/Java/.NET/static web/Electron/desktop exe), install deps, run ALL build commands, start a run probe, and collect every error. Any error → report the specific error info to the AI immediately (with file:line locations where available) and list ALL collected errors at once (later steps are skipped).
-2. **Feature completeness** — extract ALL of the user's requirements from the prompt/context, then verify each one against the implementation (heuristic keyword/structure checks + optional LLM deep analysis). Missing features are collected and reported **all at once**; step 3 runs only when step 1 and step 2 both pass.
+2. **Feature completeness** — extract ALL of the user's requirements from the prompt/context, then verify each one against the implementation (heuristic keyword/structure checks + optional LLM deep analysis + **behavioral verification: open the project like a real user — web via Playwright-rendered page text, CLI via --help/--version output — and check whether the required feature is actually visible**). Missing features are collected and reported **all at once**; step 3 runs only when step 1 and step 2 both pass.
 3. **Real user simulation** — operate the software like a real user (keyboard, mouse clicks/drags): web apps (and any GUI project such as a DSH plugin panel) via HTTP probes + Playwright, Windows desktop apps via UIA with real input events, CLIs via driven commands — following the user's described features (or README.md). **Any project with a GUI (user interface) MUST run the GUI simulation when steps 1–2 pass** — a GUI project never falls back to CLI simulation. Freezes, unresponsiveness, errors and crashes are recorded and reported to the AI. If clean → return "没有问题" and let the AI continue.
 
 **Triggers (inside Harness) — two methods, both active**:
@@ -85,7 +85,7 @@ pnpm dsh web
 
 ## Download
 
-> **Latest release: v0.4.0** — GitHub Releases, with an offline tarball asset `dsh-code-checker-0.4.0.tgz`:
+> **Latest release: v0.4.1** — GitHub Releases, with an offline tarball asset `dsh-code-checker-0.4.1.tgz`:
 > <https://github.com/noname-iii/dsh-code-checker/releases/latest>
 
 Pick **one** of these four methods (2 / 3 / 4 need `dsh` and `pnpm`; method 1 needs only `git`). **Method 2 (npm) is the recommended default** — it needs no git, no SSH key, and no local path.
@@ -117,14 +117,14 @@ dsh plugin --profile web add github:noname-iii/dsh-code-checker
 
 ### Method 4: offline tarball (machines without GitHub/npm access)
 
-1. Download `dsh-code-checker-0.4.0.tgz` from <https://github.com/noname-iii/dsh-code-checker/releases/latest>.
+1. Download `dsh-code-checker-0.4.1.tgz` from <https://github.com/noname-iii/dsh-code-checker/releases/latest>.
 2. `cd` to that file's directory, then:
 
 ```sh
-dsh plugin --profile web add ./dsh-code-checker-0.4.0.tgz
+dsh plugin --profile web add ./dsh-code-checker-0.4.1.tgz
 ```
 
-> To build the tarball yourself (equivalent): run `pnpm pack` inside the plugin dir, then `dsh plugin --profile web add ./dsh-code-checker-0.4.0.tgz`.
+> To build the tarball yourself (equivalent): run `pnpm pack` inside the plugin dir, then `dsh plugin --profile web add ./dsh-code-checker-0.4.1.tgz`.
 
 ## Install (DeepSeek Harness)
 
@@ -258,7 +258,7 @@ See the [中文 README](README.zh.md#项目架构每个文件的作用) for the 
 Short version:
 
 - **src/** — Harness plugin layer: apply() entry (index.ts), config schema (config.ts), session tracker + turn-stopping auto-check (tracker.ts), ctx.shell/ctx.llm adapters (runner.ts), report delivery (feedback.ts), /check command (commands.ts), check_project tool (tool.ts), GUI dashboard with "Status/Screen" views + report store + trace capture (gui.ts).
-- **engine/** — framework-agnostic check engine: types, filesystem utilities, project detection, requirement extraction, step 1 (build & run), step 2 (completeness), step 3 (user simulation), report rendering, and the runCheck() orchestrator.
+- **engine/** — framework-agnostic check engine: types, filesystem utilities, project detection, requirement extraction, step 1 (build & run), step 2 (completeness + behavioral verification via opening the project), step 3 (user simulation), report rendering, and the runCheck() orchestrator.
 - **cli/** — standalone CLI + MCP stdio server for any platform (child_process adapters, OpenAI-compatible analyzer).
 - **simulators/** — web-playwright.mjs (browser automation), windows-uia.ps1 (Windows desktop automation), static-server.mjs (dependency-free static server).
 - **scripts/** — build.mjs (build/typecheck, skips when lib/ is fresh), gen-tsconfig.mjs (generates local type paths for development), selfcheck.mjs (full self-check).

@@ -161,6 +161,7 @@ async function runAction(action) {                          // 定义执行单�
   actions.push(record)                                      // 将结果记录加入 actions 数组
 }
 
+let pageText = ''                                          // 渲染后的“用户可见”文本（第 2 步行为验证用）
 try {
   for (const action of interactions) {                      // 遍历所有交互动作
     if (!action || typeof action.action !== 'string') continue   // 跳过空对象或 action 非字符串的项
@@ -168,6 +169,7 @@ try {
   }
   shotIndex += 1                                            // 截图序号自增
   await shot('web-' + String(shotIndex) + '.png')           // 交互结束后最后截一张图
+  try { pageText = await page.evaluate(() => (document.body && document.body.innerText) ? document.body.innerText : '') } catch { /* 忽略 */ }   // 抓取渲染后的可见文本
 } finally {
   try { await browser.close() } catch { /* 忽略 */ }        // 无论是否异常都尝试关闭浏览器，忽略关闭异常
 }
@@ -180,4 +182,5 @@ console.log('RESULT:' + JSON.stringify({                    // 输出最终 JSON
   pageErrors,
   requestFailed,
   screenshots,
+  pageText: pageText.slice(0, 50000),                       // 渲染后可见文本（截断）
 }))
