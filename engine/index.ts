@@ -16,7 +16,7 @@
 
 // 从类型定义中引入引擎入口所需的类型（仅在编译期使用）
 import type {
-  CheckOptions, CheckReport, EngineIo, Finding, RequirementVerdict, StepResult,
+  CheckOptions, CheckReport, CheckTrace, EngineIo, Finding, RequirementVerdict, StepResult,
 } from './types.js'
 // 引入文件扫描、采样、README 读取等工具函数
 import { scanProject, sampleFiles, readReadme } from './fs.js'
@@ -108,9 +108,27 @@ function summarize(report: CheckReport, opts: CheckOptions): { ok: boolean; summ
 export async function runCheck(opts: CheckOptions, io: EngineIo): Promise<CheckReport> {
   const startedAt = new Date().toISOString() // 记录检查开始的 ISO 时间戳
   const overallStarted = Date.now() // 记录检查开始的时间戳（用于计算总耗时）
-  io.log('开始全面检查: ' + opts.projectDir) // 输出开始检查的日志
+  // 追踪数据：捕获整次检查的日志、执行的命令与真实用户操作（供 GUI 的“画面”视图展示）。
+  const trace: CheckTrace = { logs: [], commands: [], operations: [], simKind: 'none', hasGui: false, screenshots: [] } // 追踪数据容器
+  const tail = (s: string, n = 8000): string => s.length > n ? '…（输出过长，已截断）\n' + s.slice(-n) : s // 截断长输出，避免追踪数据过大
+  const startFn = io.start // 先取出后台启动函数，便于闭包内收窄类型
+  const tracedIo: EngineIo = { // 包装后的 IO：在透传的同时把日志与命令记录到 trace
+    ...io, // 原样保留 analyzer / signal / platform 等字段
+    log: (line: string): void => { trace.logs.push(line); io.log(line) }, // 记录日志并继续输出
+    exec: async (execOpts) => { // 包装前台执行：记录命令与执行结果
+      const res = await io.exec(execOpts)
+      trace.commands.push({ command: execOpts.command, cwd: execOpts.cwd, stdout: tail(res.stdout), stderr: tail(res.stderr), exitCode: res.exitCode, timedOut: res.timedOut, durationMs: res.durationMs })
+      return res
+    },
+    ...startFn !== undefined ? { start: async (startOpts) => { // 包装后台启动：记录启动命令
+      const proc = await startFn(startOpts)
+      trace.commands.push({ command: startOpts.command, cwd: startOpts.cwd, stdout: '', stderr: '', exitCode: null, timedOut: false, durationMs: 0 })
+      return proc
+    } } : {},
+  }
+  tracedIo.log('开始全面检查: ' + opts.projectDir) // 输出开始检查的日志
 
-  const projectInfo = await detectProject(opts.projectDir, io) // 检测项目类型与运行方式
+  const projectInfo = await detectProject(opts.projectDir, tracedIo) // 检测项目类型与运行方式
   const files = await scanProject(opts.projectDir) // 扫描项目文件
   const project = await sampleFiles(files, opts.maxSampleFiles, opts.maxSampleBytes) // 按预算对文件内容采样
   const readme = opts.readme ?? projectInfo.readme ?? await readReadme(opts.projectDir) // 读取 README（优先用配置，其次检测结果，最后实际读取）
@@ -122,7 +140,7 @@ export async function runCheck(opts: CheckOptions, io: EngineIo): Promise<CheckR
   const allVerdicts: RequirementVerdict[] = [] // 累积第 2 步的需求核对结论
 
   // ── 第 1 步：编译运行 ──
-  const step1 = await runStep1(opts, io) // 执行第 1 步
+  const step1 = await runStep1(opts, tracedIo) // 执行第 1 步
   steps.push(step1) // 记录第 1 步结果
   for (const f of step1.findings) issues.push(f) // 把第 1 步的问题并入总问题列表
   const step1Failed = step1.status === 'failed' // 判断第 1 步是否失败
@@ -132,7 +150,7 @@ export async function runCheck(opts: CheckOptions, io: EngineIo): Promise<CheckR
   let step3: StepResult | undefined // 第 3 步结果（可能不执行）
   const canProceed = !step1Failed || opts.runAllSteps // 是否继续执行后续步骤（第 1 步未失败，或配置要求全跑）
   if (canProceed) { // 可以继续时执行第 2 步
-    step2 = await runStep2(requirements, project, projectInfo, opts, io) // 执行第 2 步
+    step2 = await runStep2(requirements, project, projectInfo, opts, tracedIo) // 执行第 2 步
     steps.push(step2) // 记录第 2 步结果
     allVerdicts.push(...(step2.verdicts ?? [])) // 收集第 2 步的需求核对结论
     for (const f of step2.findings) issues.push(f) // 把第 2 步的问题并入总问题列表
@@ -148,7 +166,7 @@ export async function runCheck(opts: CheckOptions, io: EngineIo): Promise<CheckR
   // ── 第 3 步：真实用户模拟（第 1、2 步都通过后执行；有 GUI 的项目在 step3 内强制走 GUI 模拟）──
   const step2Clean = !step2 || step2.status !== 'failed' // 第 2 步是否“干净”（未失败或未执行）
   if (canProceed && step2Clean) { // 可继续且第 2 步干净时执行第 3 步
-    step3 = await runStep3(requirementText + '\n\n' + (readme ?? ''), projectInfo, opts, io, project) // 执行第 3 步（传入需求文本 + README + 项目采样，供 GUI 判定）
+    step3 = await runStep3(requirementText + '\n\n' + (readme ?? ''), projectInfo, opts, tracedIo, project, trace) // 执行第 3 步（传入需求文本 + README + 项目采样 + 追踪容器）
     steps.push(step3) // 记录第 3 步结果
     for (const f of step3.findings) issues.push(f) // 把第 3 步的问题并入总问题列表
   } else if (canProceed && step2 && !step2Clean) { // 第 2 步有未实现/不完整功能时跳过第 3 步
@@ -183,11 +201,12 @@ export async function runCheck(opts: CheckOptions, io: EngineIo): Promise<CheckR
     anomalies, // 模拟异常
     summary: '', // 占位，后续由 summarize 覆写
     rendered: '', // 占位，后续由 renderReport 覆写
+    trace, // 追踪数据（供 GUI 的“画面”视图展示）
   }
   const conclusion = summarize(report, opts) // 汇总结论（ok 与 summary）
   report.ok = conclusion.ok // 回填 ok
   report.summary = conclusion.summary // 回填 summary
   report.rendered = renderReport(report, opts) // 渲染报告文本
-  io.log('检查完成: ' + (report.ok ? '没有问题' : '发现问题 ' + String(report.issues.filter(i => i.level === 'error').length) + ' 处错误')) // 输出完成日志
+  tracedIo.log('检查完成: ' + (report.ok ? '没有问题' : '发现问题 ' + String(report.issues.filter(i => i.level === 'error').length) + ' 处错误')) // 输出完成日志
   return report // 返回完整报告
 }

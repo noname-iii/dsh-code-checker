@@ -9,16 +9,20 @@
 ## 目录
 
 1. [它能做什么](#它能做什么)
-2. [下载](#下载)
-3. [安装到 DeepSeek Harness](#安装到-deepseek-harness)
-4. [使用方式](#使用方式)
-5. [配置项](#配置项)
-6. [其他平台（Trae / Qoder / Cursor …）](#其他平台trae--qoder--cursor-)
-7. [try_it_out：下载后的快速自测](#try_it_out下载后的快速自测)
-8. [项目架构（每个文件的作用）](#项目架构每个文件的作用)
-9. [开发者指南（从源码构建）](#开发者指南从源码构建)
-10. [自检与测试](#自检与测试)
-11. [常见问题与已知边界](#常见问题与已知边界)
+2. [安装前准备（Node.js / pnpm / git / DeepSeek Harness）](#安装前准备nodejs--pnpm--git--deepseek-harness)
+3. [下载插件](#下载插件)
+4. [安装到 DeepSeek Harness](#安装到-deepseek-harness)
+5. [验证安装是否成功](#验证安装是否成功)
+6. [使用方式](#使用方式)
+7. [配置项](#配置项)
+8. [其他平台（Trae / Qoder / Cursor …）](#其他平台trae--qoder--cursor-)
+9. [try_it_out：下载后的快速自测](#try_it_out下载后的快速自测)
+10. [项目架构（每个文件的作用）](#项目架构每个文件的作用)
+11. [开发者指南（从源码构建）](#开发者指南从源码构建)
+12. [自检与测试](#自检与测试)
+13. [常见 Q&A](#常见-qa)
+14. [已知边界](#已知边界)
+15. [安全说明](#安全说明)
 
 ---
 
@@ -38,78 +42,228 @@
 - **方式二：轮次关闭自动检查 + 自动修复闭环（兜底）**：即使 AI 忘了调用 check_project，插件也会在 AI 每轮编码（写文件/跑命令）结束的轮次关闭检查点（agent/turn-stopping，被机器 await 的串行检查点）**主动**执行三步检查并把报告 steer 回 AI（报告保证在本轮边界提交前送达，并附带“修复后再调用 check_project 验证”的指令）。AI 修复会产生新的编码活动，于是**下一次轮次关闭检查点会再次自动检查** —— 自动形成“检查 → 报告 → 修复 → 再检查”闭环，直到返回“没有问题”或达到每用户提示的上限（默认 6 次，防死循环，可配置）。
 - **/check 斜杠命令**：随时手动检查（可附加项目目录与需求文本）。
 - **check_project 模型工具**：AI 可主动调用，结果直接作为工具结果返回。
-- **GUI 面板**：浏览器打开 http://127.0.0.1:3080/code-checker/ 查看全部报告与截图产物（与 Web GUI 同源，无需额外端口）。
+- **GUI 面板**：浏览器打开 http://127.0.0.1:3080/code-checker/，顶部有“状态 / 画面”两个视图——**状态**显示历史检查报告（与旧版一致）；**画面**左侧列出工作区中所有正在被 AI 修改的项目，右侧分为**命令行 / GUI / log** 三栏：命令行显示测试时输入的命令与运行结果，GUI 显示测试时的真实操作（web 项目会模拟浏览器真实用户操作并在此展示，无界面则显示“无”），log 显示测试时的日志（与 Web GUI 同源，无需额外端口）。
 - **审批系统通知**：当某个会话需要用户操作（例如让用户决策是否运行某条命令）时，在 Windows/macOS/Linux **系统层面弹桌面通知**，通知含“哪个会话 + 具体命令 + 运行/不运行选项”，并原样把决定权交还给 Harness（绝不替你自动放行）。可用 `notifyApprovals: false` 关闭。
 
 ---
 
-## 下载
+## 安装前准备（Node.js / pnpm / git / DeepSeek Harness）
 
-> **最新 release：v0.3.0**（已发布于 GitHub Releases，含离线 tarball 附件
-> `dsh-code-checker-0.3.0.tgz`）。下载地址：
-> https://github.com/noname-iii/dsh-code-checker/releases/latest
-> 已经安装过旧版本？见下方 [FAQ](#常见-qa) 第 15 条（无需重新克隆，重装/更新即可）。
+本插件是 **DeepSeek Harness（`dsh`）** 的插件。安装插件之前，请**按顺序**准备好下面四样东西；
+每一步都给了 **Windows / macOS / Linux** 的做法，**任选其一即可**，不需要三样都装。
 
-三种方式任选：
+### ① Node.js（必须）
 
-### 方式 1：从 GitHub 克隆（推荐给想自己发布/改代码的你）
+- **版本要求**：Node **22 LTS**（≥ 22.19.0）或 **24 及以上**。
+  - 原因：DeepSeek Harness 主机要求 `^22.19.0 || >=24.0.0`，本插件要求 `>=20`，两者取交集 → **装 22 LTS 最稳妥**。
+- **先确认是否已装好**：打开终端执行 `node -v` 与 `npm -v`，能打印出 `v22.x` / `v10.x` 这种版本号就是已装好，可跳到第 ② 步。
 
-    git clone https://github.com/noname-iii/dsh-code-checker dsh-code-checker
-    cd dsh-code-checker
+| 系统 | 安装方法（任选其一） |
+|---|---|
+| **Windows** | ① 官网图形安装：打开 <https://nodejs.org/zh-cn/> → 下载 **LTS** 版 `.msi` → 双击 → 一路「下一步」（保持默认勾选 *Add to PATH*）→ **关闭后重新打开终端** → 执行 `node -v`。<br>② 命令行（winget）：`winget install OpenJS.NodeJS.LTS` |
+| **macOS** | ① 官网图形安装：打开 <https://nodejs.org/> → 下载 **LTS** 版 `.pkg` → 双击安装。<br>② Homebrew：`brew install node@22`（装完按 brew 提示可能要把 node 加入 PATH，之后执行 `node -v`） |
+| **Linux（Debian/Ubuntu）** | ① NodeSource 仓库：`curl -fsSL https://deb.nodesource.com/setup_22.x \| sudo -E bash - && sudo apt-get install -y nodejs`。<br>② nvm（通用，见下方说明） |
 
-> 克隆下来的项目**已附带构建好的 lib/ 产物**，无需安装任何依赖即可直接使用。
-> 若你在 GitHub 上 release 了源码包，下载解压到任意目录后同样直接可用。
+> **nvm 通用装法**（Windows/macOS/Linux 都能用，方便以后切换 Node 版本）：
+>
+> ```bash
+> curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+> # 关闭并重新打开终端，然后：
+> nvm install 22
+> nvm use 22
+> node -v        # 应打印 v22.x
+> ```
+>
+> （nvm 的版本号 `v0.40.1` 可随时去 <https://github.com/nvm-sh/nvm> 查最新；Windows 用户也可用
+> [nvm-windows](https://github.com/coreybutler/nvm-windows) 代替。）
 
-### 方式 2：npm / tarball 安装（作为 dsh 插件束，推荐）
+### ② pnpm（必须，`dsh plugin add` 内部要用）
 
-    # 直接安装 npm 包
-    dsh plugin --profile web add dsh-code-checker
+- **为什么必须装**：`dsh plugin --profile web add/remove/update ...` 这条命令的底层，是 dsh 把参数**原样转发给 pnpm** 在 profile 目录里执行（见 DeepSeek Harness 官方 CLI 文档）。所以 **pnpm 必须能在终端直接调用（即在 PATH 上）**，否则装插件会报「pnpm not found」。
+- **安装**（装好 Node 之后，任选其一）：
 
-    # 或下载最新 release 附件（离线分发，无需 clone、无需打包）
-    dsh plugin --profile web add ./dsh-code-checker-0.3.0.tgz
+```bash
+npm install -g pnpm
+# 或者用 Node 自带的 corepack：
+corepack enable && corepack prepare pnpm@latest --activate
+```
 
-    # 或从本目录自己打 tarball 再安装
-    pnpm pack                     # 生成 dsh-code-checker-<版本>.tgz
-    dsh plugin --profile web add ./dsh-code-checker-<版本>.tgz
+- **确认**：执行 `pnpm -v`，能打印版本号即成功。
 
-### 方式 3：GitHub 直装（免 clone）
+### ③ git（仅「git 克隆 / GitHub 直装」两种下载方式需要）
 
-    dsh plugin --profile web add github:noname-iii/dsh-code-checker
+- 如果你打算只用「npm 包直装」或「release 离线 tarball」，**这一步可以跳过**。
+- **安装**：
 
-> 首次 GitHub 直装时 pnpm ≥10 会要求允许运行 prepare 构建脚本：
-> 按提示把包名加入 profile 目录下 pnpm-workspace.yaml 的 allowBuilds 后重装即可。
-> （本项目 prepare 是安全的：只在 lib/ 缺失或过旧时才调用 TypeScript 重建，详见开发者指南。）
+| 系统 | 命令 / 操作 |
+|---|---|
+| **Windows** | 打开 <https://git-scm.com/download/win> → 下载安装程序 → 一路默认安装 |
+| **macOS** | `brew install git`（或 `xcode-select --install`，Xcode 命令行工具自带 git） |
+| **Linux（Debian/Ubuntu）** | `sudo apt install git` |
+| **Linux（Fedora）** | `sudo dnf install git` |
+
+- **确认**：执行 `git --version`。
+
+### ④ DeepSeek Harness（`dsh` 命令）
+
+- **这是插件的宿主**，后面所有 `dsh web` / `dsh plugin ...` 命令都由它提供。
+- **三种装法任选其一**：
+
+```bash
+# 方式 A（推荐）：全局安装，装完终端里就有 `dsh` 命令
+npm install -g @deepseek-ai/dsh
+dsh web          # 启动 Web UI，默认地址 http://127.0.0.1:3080
+
+# 方式 B（不想装全局）：用 npx，每条命令前加 npx @deepseek-ai/dsh
+npx @deepseek-ai/dsh web
+npx @deepseek-ai/dsh plugin --profile web add ...
+
+# 方式 C（从源码跑，开发者用）：
+git clone https://github.com/deepseek-ai/deepseek-harness.git
+cd deepseek-harness
+pnpm install
+pnpm run build
+pnpm dsh web
+```
+
+> 说明：`web` / `headless` 两个 profile 在**首次使用时会自动初始化**（`web` = base + web-app 模板），
+> 所以第一次执行 `dsh plugin --profile web add ...` 前无需手动创建 profile。
+> 另外，启动 `dsh web` 后，请先在网页 **设置 → 模型** 填入你的 API Key 并保存（否则 AI 会话无法运行）。
+
+---
+
+## 下载插件
+
+> **最新 release：v0.4.0**（已发布于 GitHub Releases，含离线 tarball 附件
+> `dsh-code-checker-0.4.0.tgz`）。下载地址：
+> <https://github.com/noname-iii/dsh-code-checker/releases/latest>
+> 已装过旧版本？见下方 [FAQ](#常见-qa) 第 15 条（无需重新克隆，重装/更新即可）。
+
+下面 **四种方式任选其一**。注意：方式 2 / 3 / 4 依赖上面的 `dsh` 与 `pnpm`；方式 1 只依赖 `git`。**方式 2（npm）是首选**——无需 git、无需 SSH key、无需本地路径。
+
+> ⚠️ **本地目录安装的坑（务必先看）**：给 `dsh plugin add` 传**本地路径**时，要写**完整绝对路径**
+> （如 `/Users/yang/dsh-code-checker`），**不要写 `~` 简写**——尤其不要写带引号的 `"~/xxx"`，因为引号里的 `~`
+> 不会被终端展开；pnpm 收到“含 `/` 却又不是真实路径”的字符串时，会把它当成
+> `git+ssh://git@github.com/...` 去 clone，于是报 `Permission denied (publickey)`。
+> 想省事就用 `$HOME/xxx`，或不加引号让 `~` 自己展开；**最省事的是直接用方式 2（npm 直装）**。
+
+### 方式 1：git 克隆（想看源码 / 改代码 / 本地调试，推荐）
+
+```bash
+git clone https://github.com/noname-iii/dsh-code-checker dsh-code-checker
+cd dsh-code-checker
+```
+
+> 克隆下来的项目**已附带构建好的 `lib/` 产物**，无需 `npm install`、无需 TypeScript，
+> 放到任何目录都能直接用。完成后直接看下一节「安装到 DeepSeek Harness」。
+
+### 方式 2：npm 包直装（首选 · 最简单，无需 git、无需 SSH、无需本地路径）
+
+```bash
+dsh plugin --profile web add dsh-code-checker
+```
+
+### 方式 3：GitHub 直装（免 clone，pnpm 会自动拉取仓库）
+
+```bash
+dsh plugin --profile web add github:noname-iii/dsh-code-checker
+```
+
+> 首次用 git / github 直装时，pnpm ≥10 会要求**允许运行 `prepare` 构建脚本**：
+> 按提示把包名加入 profile 目录下 `pnpm-workspace.yaml` 的 `allowBuilds` 后重装即可。
+> 本项目 `prepare` 是安全的：只在 `lib/` 缺失或过旧时才调用 TypeScript 重建（详见开发者指南）。
+
+### 方式 4：release 离线 tarball（无法访问 GitHub / npm 的机器）
+
+1. 到 <https://github.com/noname-iii/dsh-code-checker/releases/latest> 下载附件 `dsh-code-checker-0.4.0.tgz`。
+2. 在终端 `cd` 到该文件所在目录，执行：
+
+```bash
+dsh plugin --profile web add ./dsh-code-checker-0.4.0.tgz
+```
+
+> 想自己打 tarball 也可以（效果等价于方式 4）：在插件目录里执行
+>
+> ```bash
+> pnpm pack    # 生成 dsh-code-checker-0.4.0.tgz
+> dsh plugin --profile web add ./dsh-code-checker-0.4.0.tgz
+> ```
 
 ---
 
 ## 安装到 DeepSeek Harness
 
+> 前提：已完成「安装前准备」并至少完成「下载插件」中的一种方式。
+> **关键提醒**：bundle 安装 / 更新后，**必须重启 `dsh web` 才生效** —— 插件行列表只在启动时读取，
+> 运行中的实例不会热加载新安装的 bundle。
+
 ### 方式 A：安装为插件束（推荐，一次安装处处可用）
 
-    # 从本地目录（把 <插件目录> 换成你下载/克隆后的实际路径）
-    dsh plugin --profile web add "<插件目录>"
+```bash
+# 若你用的是「git 克隆」（下载方式 1），从本地目录安装：
+# ⚠️ 路径写「完整绝对路径」，别写 ~ 简写（尤其别加引号），否则会被当成 GitHub SSH 地址报 Permission denied。
+dsh plugin --profile web add "<插件目录>"
+#   Windows 例：     dsh plugin --profile web add "D:\tools\dsh-code-checker"
+#   macOS/Linux 例： dsh plugin --profile web add "$HOME/dsh-code-checker"
+#                    dsh plugin --profile web add /Users/yang/dsh-code-checker
 
-    # 或直接装 npm 包（见上节方式 2）
-    dsh plugin --profile web add dsh-code-checker
+# 若你用的是 npm / github / tarball 直装（下载方式 2/3/4），其实上面已经装好了，直接启动：
+dsh web
+```
 
-    # 启动
-    dsh web
+> **`~/xxx` 为什么会报 `Permission denied (publickey)`？** 因为 `"~/xxx"` 里的 `~` 不展开，pnpm 把
+> 这段“含 `/` 却非真实路径”的字符串解析成 `git+ssh://git@github.com/~/xxx.git`，走 SSH 去 clone。
+> 对策：写完整路径 `/Users/yang/...`，或 `$HOME/...`，或不加引号的 `~/...`；也可以直接用方式 2（npm）。
 
-安装后无需任何额外配置，插件自动生效。
+- 安装完成后**无需任何额外配置**，插件自动生效。
+- 启动后控制台应出现 `[dsh-code-checker] dsh-code-checker 已加载…`；浏览器打开
+  <http://127.0.0.1:3080/code-checker/> 应能看到检查面板。
 
 ### 方式 B：--patch 覆盖层（免安装，适合临时试用）
 
-用任意文本编辑器打开 examples/web-overlay.yml，把其中的 <插件绝对路径> 替换为本插件目录的绝对路径：
+用任意文本编辑器打开 `examples/web-overlay.yml`，把其中的 `<插件绝对路径>` 替换为本插件目录的绝对路径：
 
-- **Windows** 必须用 file:/// 形式（loader 直接 import 非相对名字时要求合法 URL）：
+- **Windows** 必须用 `file:///` 形式（loader 直接 import 非相对名字时要求合法 URL）：
+
+  ```yaml
   name: 'file:///D:/你的目录/dsh-code-checker/lib/src/index.js'
+  ```
+
 - **macOS / Linux** 用普通绝对路径：
+
+  ```yaml
   name: '/home/你/dsh-code-checker/lib/src/index.js'
+  ```
 
 然后：
 
-    pnpm dsh web --patch "<插件目录>/examples/web-overlay.yml"
-    # 或已安装版：dsh web --patch "<插件目录>/examples/web-overlay.yml"
+```bash
+# 已全局安装 dsh：
+dsh web --patch "<插件目录>/examples/web-overlay.yml"
+# 从源码跑 Harness（开发者）：
+pnpm dsh web --patch "<插件目录>/examples/web-overlay.yml"
+```
+
+---
+
+## 验证安装是否成功
+
+装好后，用下面**任一种**方式确认插件真的能工作（这些自测都**不需要 API Key**）：
+
+```bash
+# 方式 1（推荐，一步到位）：跑 try_it_out 自测，5 个示例项目逐个验证
+powershell -ExecutionPolicy Bypass -File try_it_out/run-tests.ps1   # Windows
+bash try_it_out/run-tests.sh                                        # macOS / Linux
+
+# 方式 2：验证「下载到任意目录都能用 + 无本机路径/密钥残留」（可移植性检查）
+node scripts/portable-check.mjs
+
+# 方式 3：直接用 CLI 检查一个健康示例，应输出「没有问题」且退出码为 0
+node lib/cli/index.js check try_it_out/healthy-cli --no-install --no-llm
+```
+
+- 预期：健康项目返回 **「没有问题」**，构建失败项目返回报错，功能缺失项目一次性列出全部缺失功能。
+- 自测全部通过，就说明插件在当前机器上**下载、解压、运行全部正常**，可以放心使用。
 
 ---
 
@@ -120,7 +274,7 @@
 | 自动 | 无需操作 | 在会话里让 AI 写代码/跑命令，本轮结束时自动检查并回传报告 |
 | 斜杠命令 | 输入 /check | 手动检查当前项目；可加参数：/check <目录> <附加需求文本> |
 | 模型工具 | 让 AI 调用 check_project | AI 可随时自检，报告直接作为工具结果返回 |
-| GUI | 打开 http://127.0.0.1:3080/code-checker/ | 查看历史报告、完整详情与模拟截图 |
+| GUI | 打开 http://127.0.0.1:3080/code-checker/ | 顶部“状态/画面”两栏：状态=历史报告与详情；画面=各项目 + 命令行/GUI/log 测试画面 |
 
 ---
 
@@ -222,7 +376,7 @@
     │  ├─ feedback.ts           报告回传：把报告文本以插件上下文消息 steer/inject 给 AI
     │  ├─ commands.ts           /check 斜杠命令（人机命令面，结果不进模型历史）
     │  ├─ tool.ts               check_project 模型工具（AI 可主动调用）
-    │  └─ gui.ts                GUI：报告仓库 + /code-checker/ 路由（面板页与 JSON API）
+    │  └─ gui.ts                GUI：/code-checker/ 面板（顶部“状态/画面”两视图；状态=报告列表，画面=项目列表 + 命令行/GUI/log 三面板）
     │
     ├─ engine/                  ── 检查引擎（与框架无关，仅依赖 Node 内置模块）──
     │  ├─ types.ts              全部核心数据类型（ExecResult/EngineIo/CheckOptions/CheckReport…）
@@ -345,7 +499,7 @@
 不会，双重防护：① 只有“自上次检查之后产生了新的编码活动”才会再次自动检查（AI 修复代码 → 再检查一次；AI 只说话不写代码 → 不重复检查，避免空转）；② 每个用户提示最多自动检查 maxAutoChecksPerPrompt（默认 6）次，之后必须等新的用户消息才会恢复。AI 主动调用 check_project 工具不受此上限限制。
 
 **Q4. 检查报告在哪里能看到？**
-① 直接回传给 AI（steer，AI 会收到并处理）；② GUI 面板 http://127.0.0.1:3080/code-checker/（历史报告、完整详情、模拟截图）；③ 控制台 [dsh-code-checker] 日志。
+① 直接回传给 AI（steer，AI 会收到并处理）；② GUI 面板 http://127.0.0.1:3080/code-checker/（“状态”页看历史报告/完整详情，“画面”页看各项目的命令行/GUI/log 测试画面与截图）；③ 控制台 [dsh-code-checker] 日志。
 
 **Q5. 机器上没装 Playwright 会怎样？**
 Web 模拟自动回退为 HTTP 探针（检测首页响应时间与状态码），其余两步不受影响；装好后（npm i playwright 或 npx playwright install chromium）自动升级为完整浏览器自动化。
@@ -379,6 +533,9 @@ LLM 可用且 useLlm 开启时以 LLM 结论为准（启发式作为旁证与回
 
 **Q15. 我已经安装过这个插件，还需要重新下载吗？**
 通常不需要重新下载：本插件**零外部运行时依赖**，已安装的目录可以直接用 `git pull`（克隆安装）或重新执行 `dsh plugin add` 指向最新版本来更新。只有当你想用 GitHub release 附带的离线 tarball（适合无法访问 GitHub 的机器）时才需要下载 `dsh-code-checker-<版本>.tgz` 并重装。更新后**重启 dsh web** 生效（插件行列表只在启动时读取）。本地与最新 release 是否一致，可对比目录里 `package.json` 的 `version` 与 https://github.com/noname-iii/dsh-code-checker/releases/latest 的版本号。
+
+**Q16. 我用 `dsh plugin add "~/dsh-code-checker"` 报 `Permission denied (publickey)` / 被当成 GitHub 地址，怎么办？**
+这是路径写法的坑：带引号的 `"~/xxx"` 里 `~` 不会展开，pnpm 会把“含 `/` 但非真实路径”的字符串解析成 `git+ssh://git@github.com/...` 去走 SSH，自然报 publickey。三种正确写法任选：① 完整绝对路径 `dsh plugin add "$HOME/dsh-code-checker"` 或 `/Users/你的名字/dsh-code-checker`；② 不加引号 `dsh plugin add ~/dsh-code-checker`（让终端展开 `~`）；③ 干脆用 npm 直装 `dsh plugin add dsh-code-checker`（无需本地路径、无需 git、无需 SSH）。
 
 ## 已知边界
 

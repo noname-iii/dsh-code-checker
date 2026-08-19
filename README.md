@@ -15,33 +15,179 @@ See [README.zh.md](README.zh.md) for the full documentation (中文).
 1. **Appended system-prompt section (primary; append-only, nothing existing is ever deleted or modified)**. The plugin registers a systemPrompt.section (order 180, inside the tool-guidance band) telling the AI to *call check_project after finishing code and keep fixing per the report until it returns "没有问题"*. Configurable via promptSection / promptSectionText; removed automatically when the plugin unloads.
 2. **Turn-stopping auto-check with fix-recheck loop (fallback)**. Even if the AI forgets to call check_project, the plugin runs the three-step check itself at the turn-stopping checkpoint after coding turns and steers the report back to the AI (with a "fix and re-verify" instruction). New coding activity from the fix triggers the next auto-check, forming an automatic check → report → fix → re-check loop until clean, capped per user prompt (default 6) to avoid loops.
 
-Plus the /check slash command, the check_project model tool, the GUI dashboard at http://127.0.0.1:3080/code-checker/, and **OS-level approval notifications**: when a session needs user action (e.g. deciding whether to run a command), the plugin pops a system notification on Windows/macOS/Linux showing which session, the specific command, and the run/don't-run options — while always handing the actual decision back to the Harness approval UI (`notifyApprovals: false` to disable).
+Plus the /check slash command, the check_project model tool, the GUI dashboard at http://127.0.0.1:3080/code-checker/ (with a top "状态/Status + 画面/Screen" tab bar — Status lists historical reports, Screen shows the per-project command line / GUI / log testing view), and **OS-level approval notifications**: when a session needs user action (e.g. deciding whether to run a command), the plugin pops a system notification on Windows/macOS/Linux showing which session, the specific command, and the run/don't-run options — while always handing the actual decision back to the Harness approval UI (`notifyApprovals: false` to disable).
+
+## Prerequisites
+
+The plugin runs inside **DeepSeek Harness (`dsh`)**. Before installing, set up these four things in order (each step gives Windows / macOS / Linux options — pick one per step).
+
+### 1) Node.js
+
+- **Version**: Node **22 LTS** (≥ 22.19.0) or **24+**. DeepSeek Harness requires `^22.19.0 || >=24.0.0`; this plugin requires `>=20`, so 22 LTS is the safe choice.
+- Check: run `node -v` and `npm -v`.
+
+| OS | Install (pick one) |
+|---|---|
+| **Windows** | Download the **LTS** `.msi` from <https://nodejs.org/> → run it → keep *Add to PATH* checked → reopen the terminal → `node -v`. Or: `winget install OpenJS.NodeJS.LTS` |
+| **macOS** | Download the **LTS** `.pkg` from <https://nodejs.org/> and run it. Or Homebrew: `brew install node@22` |
+| **Linux (Debian/Ubuntu)** | `curl -fsSL https://deb.nodesource.com/setup_22.x \| sudo -E bash - && sudo apt-get install -y nodejs` |
+
+> Universal alternative (any OS): [nvm](https://github.com/nvm-sh/nvm) —
+> `curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash`,
+> reopen the terminal, then `nvm install 22 && nvm use 22`.
+
+### 2) pnpm
+
+- **Required**: `dsh plugin --profile web add/remove/...` forwards its arguments to **pnpm** inside the profile directory, so pnpm must be on PATH.
+- Install (after Node):
+
+```sh
+npm install -g pnpm
+# or
+corepack enable && corepack prepare pnpm@latest --activate
+```
+
+- Check: `pnpm -v`.
+
+### 3) git
+
+- Only needed for the **git clone** and **GitHub direct** download methods (skip for npm / tarball installs).
+
+| OS | Install |
+|---|---|
+| **Windows** | <https://git-scm.com/download/win> |
+| **macOS** | `brew install git` (or `xcode-select --install`) |
+| **Linux (Debian/Ubuntu)** | `sudo apt install git` |
+| **Linux (Fedora)** | `sudo dnf install git` |
+
+- Check: `git --version`.
+
+### 4) DeepSeek Harness (the `dsh` command)
+
+```sh
+# A) global install (recommended) — gives you the `dsh` command
+npm install -g @deepseek-ai/dsh
+dsh web          # starts the Web UI at http://127.0.0.1:3080
+
+# B) no global install — prefix every command with npx
+npx @deepseek-ai/dsh web
+npx @deepseek-ai/dsh plugin --profile web add ...
+
+# C) from source (developers)
+git clone https://github.com/deepseek-ai/deepseek-harness.git
+cd deepseek-harness
+pnpm install
+pnpm run build
+pnpm dsh web
+```
+
+> The `web` / `headless` profiles auto-initialize on first use (`web` = base + web-app template), so you don't need to create a profile before running `dsh plugin --profile web add ...`. After starting `dsh web`, open **Settings → Models** and enter your API key, or AI sessions won't run.
 
 ## Download
 
-> **Latest release: v0.3.0** — published on GitHub Releases with an offline tarball asset `dsh-code-checker-0.3.0.tgz`: https://github.com/noname-iii/dsh-code-checker/releases/latest
+> **Latest release: v0.4.0** — GitHub Releases, with an offline tarball asset `dsh-code-checker-0.4.0.tgz`:
+> <https://github.com/noname-iii/dsh-code-checker/releases/latest>
 
-    git clone https://github.com/noname-iii/dsh-code-checker dsh-code-checker
-    cd dsh-code-checker
+Pick **one** of these four methods (2 / 3 / 4 need `dsh` and `pnpm`; method 1 needs only `git`). **Method 2 (npm) is the recommended default** — it needs no git, no SSH key, and no local path.
 
-or install straight from GitHub / npm / the release tarball as a dsh bundle:
+> ⚠️ **Local-path pitfall (read first)**: when passing a *local directory* to `dsh plugin add`, write a **full absolute path** (e.g. `/Users/yang/dsh-code-checker`) — **never a `~` shorthand, and especially not a quoted one**. Inside quotes `~` is not expanded by the shell, and pnpm treats a string that "contains `/` but is not a real path" as `git+ssh://git@github.com/...`, then fails with `Permission denied (publickey)`. Use `$HOME/dsh-code-checker`, an unquoted `~/dsh-code-checker`, or just Method 2 (npm) to avoid this entirely.
 
-    dsh plugin --profile web add github:noname-iii/dsh-code-checker
-    dsh plugin --profile web add dsh-code-checker                     # npm package
-    dsh plugin --profile web add ./dsh-code-checker-0.3.0.tgz         # offline (release asset)
+### Method 1: git clone (read/modify the source, local dev)
 
-The repository ships prebuilt lib/ artifacts — no dependencies or TypeScript needed to use it. Cloning/downloading to any directory works as-is.
+```sh
+git clone https://github.com/noname-iii/dsh-code-checker dsh-code-checker
+cd dsh-code-checker
+```
+
+> The repo ships prebuilt `lib/` artifacts — no `npm install`, no TypeScript needed; it works from any directory.
+
+### Method 2: npm package (recommended — simplest; no git, no SSH, no local path)
+
+```sh
+dsh plugin --profile web add dsh-code-checker
+```
+
+### Method 3: GitHub direct (no clone)
+
+```sh
+dsh plugin --profile web add github:noname-iii/dsh-code-checker
+```
+
+> On first git/github install, pnpm ≥10 asks you to allow the `prepare` build script — add the package to `allowBuilds` in the profile's `pnpm-workspace.yaml` when prompted, then re-install. This project's `prepare` is safe: it only rebuilds `lib/` when missing or stale.
+
+### Method 4: offline tarball (machines without GitHub/npm access)
+
+1. Download `dsh-code-checker-0.4.0.tgz` from <https://github.com/noname-iii/dsh-code-checker/releases/latest>.
+2. `cd` to that file's directory, then:
+
+```sh
+dsh plugin --profile web add ./dsh-code-checker-0.4.0.tgz
+```
+
+> To build the tarball yourself (equivalent): run `pnpm pack` inside the plugin dir, then `dsh plugin --profile web add ./dsh-code-checker-0.4.0.tgz`.
 
 ## Install (DeepSeek Harness)
 
-Recommended: install as a bundle, then start:
+> After a bundle install/update you **must restart `dsh web`** — the plugin list is read at boot only.
 
-    dsh plugin --profile web add "<plugin-dir>"
-    dsh web
+### Method A: install as a bundle (recommended)
 
-Or mount without installing: edit examples/web-overlay.yml, replace <插件绝对路径> with the absolute path to this plugin (Windows requires the file:///D:/... form; macOS/Linux use a plain absolute path), then:
+```sh
+# git-clone installs (download method 1) — use a FULL absolute path, never ~ (see pitfall above):
+dsh plugin --profile web add "<plugin-dir>"
+#   Windows:      dsh plugin --profile web add "D:\tools\dsh-code-checker"
+#   macOS/Linux:  dsh plugin --profile web add "$HOME/dsh-code-checker"
+#                 dsh plugin --profile web add /Users/you/dsh-code-checker
 
-    pnpm dsh web --patch "<plugin-dir>/examples/web-overlay.yml"
+# npm / github / tarball installs (download methods 2/3/4) are already installed — just start:
+dsh web
+```
+
+> **Why does `"~/dsh-code-checker"` fail with `Permission denied (publickey)`?** The `~` inside quotes is not expanded, so pnpm receives the literal `~/dsh-code-checker`, parses it as `git+ssh://git@github.com/~/dsh-code-checker.git`, and tries SSH. Write `/Users/you/...`, `$HOME/...`, or an unquoted `~/...`; or just use Method 2 (npm).
+
+No further configuration is needed. On boot you should see `[dsh-code-checker] dsh-code-checker loaded…` and the dashboard at <http://127.0.0.1:3080/code-checker/>.
+
+### Method B: --patch overlay (no install, quick trial)
+
+Edit `examples/web-overlay.yml` and replace `<插件绝对路径>` with this plugin's absolute path:
+
+- **Windows** — `file:///` form is required (the loader imports a non-relative name, which must be a valid URL):
+
+  ```yaml
+  name: 'file:///D:/your-dir/dsh-code-checker/lib/src/index.js'
+  ```
+
+- **macOS / Linux** — plain absolute path:
+
+  ```yaml
+  name: '/home/you/dsh-code-checker/lib/src/index.js'
+  ```
+
+Then:
+
+```sh
+dsh web --patch "<plugin-dir>/examples/web-overlay.yml"
+# from-source harness (developers):
+pnpm dsh web --patch "<plugin-dir>/examples/web-overlay.yml"
+```
+
+## Verify the install
+
+Any of these confirm the plugin works (none needs an API key):
+
+```sh
+# 1) try_it_out — runs the checker against 5 sample projects
+powershell -ExecutionPolicy Bypass -File try_it_out/run-tests.ps1   # Windows
+bash try_it_out/run-tests.sh                                        # macOS / Linux
+
+# 2) portability check — "downloads to any dir and works" + no local paths/secrets
+node scripts/portable-check.mjs
+
+# 3) CLI smoke test — should print "没有问题" and exit 0
+node lib/cli/index.js check try_it_out/healthy-cli --no-install --no-llm
+```
+
+Expected: the healthy sample returns **"没有问题"**, the broken build reports errors, and the missing-feature sample lists every missing feature at once. All green means the download, extraction and execution are correct.
 
 ## Usage
 
@@ -50,7 +196,7 @@ Or mount without installing: edit examples/web-overlay.yml, replace <插件绝�
 | Automatic | Just let the AI write code / run commands — the check runs when the turn stops |
 | Slash command | Type /check in the chat (optionally /check <dir> <extra requirements>) |
 | Model tool | Ask the AI to call check_project |
-| GUI | Open http://127.0.0.1:3080/code-checker/ |
+| GUI | Open http://127.0.0.1:3080/code-checker/ | Top "Status/Screen" tabs: Status = report history; Screen = per-project command line / GUI / log testing view |
 
 ## Configuration
 
@@ -111,7 +257,7 @@ See the [中文 README](README.zh.md#项目架构每个文件的作用) for the 
 
 Short version:
 
-- **src/** — Harness plugin layer: apply() entry (index.ts), config schema (config.ts), session tracker + turn-stopping auto-check (tracker.ts), ctx.shell/ctx.llm adapters (runner.ts), report delivery (feedback.ts), /check command (commands.ts), check_project tool (tool.ts), GUI dashboard + report store (gui.ts).
+- **src/** — Harness plugin layer: apply() entry (index.ts), config schema (config.ts), session tracker + turn-stopping auto-check (tracker.ts), ctx.shell/ctx.llm adapters (runner.ts), report delivery (feedback.ts), /check command (commands.ts), check_project tool (tool.ts), GUI dashboard with "Status/Screen" views + report store + trace capture (gui.ts).
 - **engine/** — framework-agnostic check engine: types, filesystem utilities, project detection, requirement extraction, step 1 (build & run), step 2 (completeness), step 3 (user simulation), report rendering, and the runCheck() orchestrator.
 - **cli/** — standalone CLI + MCP stdio server for any platform (child_process adapters, OpenAI-compatible analyzer).
 - **simulators/** — web-playwright.mjs (browser automation), windows-uia.ps1 (Windows desktop automation), static-server.mjs (dependency-free static server).
@@ -166,6 +312,7 @@ The LLM is the plugin's optional deep-analysis layer (steps 2 & 3 only; step 1 a
 - **Quick sanity check?** Run try_it_out/run-tests.ps1 (or .sh): healthy → "没有问题", broken build → error report, missing features → all missing features listed at once.
 - **Port conflicts?** The web simulation only probes local loopback ports (5173/3000/8080/4173, …) and never binds them.
 - **Heuristic vs LLM verdicts?** LLM wins when available (heuristic as fallback/corroboration); heuristic-only mode is intentionally conservative and may treat a feature merely mentioned in comments/strings as implemented.
+- **`dsh plugin add "~/dsh-code-checker"` fails with `Permission denied (publickey)` / treated as a GitHub URL?** The `~` inside quotes isn't expanded, so pnpm parses the literal `~/dsh-code-checker` as `git+ssh://git@github.com/...` and tries SSH. Fix: use a full absolute path (`$HOME/dsh-code-checker` or `/Users/you/dsh-code-checker`), or an unquoted `~/...`, or just `dsh plugin add dsh-code-checker` (npm — no path, no git, no SSH).
 
 ## Known boundaries
 

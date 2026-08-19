@@ -1,7 +1,7 @@
 {
   "name": "dsh-code-checker",
-  "version": "0.3.0",
-  "description": "DeepSeek Harness 浠ｇ爜鍏ㄩ潰妫€鏌ユ彃浠讹細涓夋娴佹按绾匡紙缂栬瘧杩愯妫€鏌?鈫?鍔熻兘瀹屾暣鎬ф牳瀵?鈫?鐪熷疄鐢ㄦ埛妯℃嫙娴嬭瘯锛夛紝鑷姩鎶婇棶棰樺弽棣堢粰 AI 淇锛屽彲閫夌敤 GUI锛屽苟闄勫甫閫傜敤浜?Trae/Qoder 绛夊钩鍙扮殑鐙珛 CLI 涓?MCP 鏈嶅姟",
+  "version": "0.4.0",
+  "description": "DeepSeek Harness 代码全面检查插件：三步流水线（编译运行检查 → 功能完整性核对 → 真实用户模拟测试），自动把问题反馈给 AI 修复，可选用 GUI，并附带适用于 Trae/Qoder 等平台的独立 CLI 与 MCP 服务",
   "keywords": ["deepseek-harness", "plugin", "code-check", "bug-check", "qa", "simulation", "mcp"],
   "type": "module",
   "main": "lib/src/index.js",
@@ -19,7 +19,7 @@
     "cordis.patch.yml",
     "README.md",
     "README.zh.md",
-    "闇€姹?txt"
+    "需求.txt"
   ],
   "exports": {
     ".": {

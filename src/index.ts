@@ -17,6 +17,8 @@
  * @module dsh-code-checker
  */
 
+// 导入 path.basename：从目录路径取项目名（画面视图左侧项目列表用）
+import { basename } from 'node:path'
 // 导入 Cordis 的 Context 类型（插件 apply 函数参数用）
 import type { Context } from '@deepseek-ai/cordis'
 // 导入 dsh-agent 的 Agent 类型
@@ -215,7 +217,18 @@ export function apply(ctx: Context, config?: ConfigType): void { // 插件入口
   if (config.gui) { // 若配置启用了 GUI
     const webServer = ctx.get('webServer', false) // 获取 webServer 服务（不存在则 false）
     if (webServer) { // 若 webServer 服务存在
-      installGui(webServer, store) // 挂载 GUI 检查面板
+      // 把“正在被 AI 修改的项目”（根 agent 会话 cwd）作为画面视图左侧的活跃项目列表提供给 GUI。
+      installGui(webServer, store, () => { // 挂载 GUI 检查面板，并注入活跃项目列表回调
+        const seen = new Set<string>() // 按目录去重
+        const out: { dir: string; name: string; sessionId: string }[] = [] // 项目列表结果
+        for (const rootAgent of ctx.agents.roots()) { // 遍历所有根 agent
+          const dir = rootAgent.session?.header.cwd // 取会话工作目录
+          if (!dir || seen.has(dir)) continue // 无目录或已记录则跳过
+          seen.add(dir) // 标记已记录
+          out.push({ dir, name: basename(dir), sessionId: String(rootAgent.id) }) // 收集项目
+        }
+        return out // 返回活跃项目列表
+      })
       log('检查面板已挂载: /code-checker/') // 记录面板挂载日志
     } else { // 否则（webServer 不存在）
       log('webServer 服务不存在（headless 环境），跳过 GUI 挂载。') // 记录跳过 GUI 的日志

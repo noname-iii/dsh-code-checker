@@ -8,7 +8,7 @@
  * 依据用户描述的功能（或 README）操作，记录卡顿、无响应、报错等异常。
  * @module dsh-code-checker/engine
  */
-import type { CheckOptions, EngineIo, StepResult } from './types.js';
+import type { CheckOptions, CheckTrace, EngineIo, StepResult } from './types.js';
 import type { ProjectInfo } from './detect.js';
 import type { ProjectFiles } from './fs.js';
 /** 模拟计划中的一次交互。 */
@@ -39,4 +39,5 @@ sourceText: string, // 来源文本（用户需求与 README）
 projectInfo: ProjectInfo, // 项目信息
 opts: CheckOptions, // 检查配置
 io: EngineIo, // IO 适配器
-project?: ProjectFiles): Promise<StepResult>;
+project?: ProjectFiles, // 项目文件采样（GUI 判定用；缺省时按项目类型推断）
+trace?: CheckTrace): Promise<StepResult>;

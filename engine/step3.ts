@@ -17,7 +17,7 @@ import { randomUUID } from 'node:crypto'
 import { request as httpRequest } from 'node:http' // 引入 node:http 的 request（HTTP 探针用，避免 undici 长连接在进程退出时崩溃）
 // 从类型定义中引入第 3 步所需的类型（仅在编译期使用）
 import type {
-  Anomaly, CheckOptions, EngineIo, Finding, StepResult,
+  Anomaly, CheckOptions, CheckTrace, EngineIo, Finding, StepResult,
 } from './types.js'
 import type { ProjectInfo } from './detect.js' // 引入项目信息类型
 import { guiPanelPaths, guiSimKind } from './detect.js' // 引入 GUI 模拟类型判定与面板路径提取
@@ -196,6 +196,7 @@ async function simulateWeb( // 定义 web 模拟函数
   opts: CheckOptions, // 检查配置
   io: EngineIo, // IO 适配器
   artifacts: string, // 产物目录
+  trace?: CheckTrace, // 追踪容器（记录 web 真实操作与服务地址）
 ): Promise<{ anomalies: Anomaly[]; detail: string[]; artifacts: string[]; ran: boolean }> { // 返回模拟结果
   const anomalies: Anomaly[] = [] // 累积异常
   const detail: string[] = [] // 累积详细说明
@@ -288,12 +289,13 @@ async function simulateWeb( // 定义 web 模拟函数
       if (jsonLine) { // 找到结果行
         try {
           const result = JSON.parse(jsonLine) as { // 解析结果 JSON
-            ok: boolean; playwright?: boolean; note?: string; actions: { action: string; target?: string; ok: boolean; durationMs: number; error?: string }[]; // 基础字段与操作列表
+            ok: boolean; playwright?: boolean; note?: string; actions: { action: string; target?: string; value?: string; ok: boolean; durationMs: number; error?: string }[]; // 基础字段与操作列表
             consoleErrors: string[]; pageErrors: string[]; requestFailed: string[]; screenshots: string[]; // 错误与截图字段
           }
           if (result.playwright) { // Playwright 可用
             playwrightUsed = true // 标记使用了 Playwright
             for (const action of result.actions) { // 逐个操作检查
+              trace?.operations.push({ kind: 'web', action: action.action, target: action.target || undefined, value: action.value || undefined, ok: action.ok, durationMs: action.durationMs, error: action.error || undefined }) // 记录真实浏览器操作（供 GUI 展示）
               if (!action.ok) { // 操作失败
                 anomalies.push({ // 记录异常
                   kind: 'unresponsive', // 无响应级
@@ -352,6 +354,7 @@ async function simulateWeb( // 定义 web 模拟函数
   if (server) { // 若启动了服务器
     try { await server.stop() } catch { /* 忽略停止失败 */ } // 停止服务器（忽略失败）
   }
+  if (trace && baseUrl) trace.baseUrl = baseUrl // 记录探测/启动到的服务地址（供 GUI 展示）
   return { anomalies, detail, artifacts: produced, ran: playwrightUsed || baseUrl !== undefined } // 返回模拟结果
 }
 
@@ -427,6 +430,7 @@ async function simulateDesktop( // 定义桌面模拟函数
   opts: CheckOptions, // 检查配置
   io: EngineIo, // IO 适配器
   artifacts: string, // 产物目录
+  trace?: CheckTrace, // 追踪容器（记录桌面真实操作）
 ): Promise<{ anomalies: Anomaly[]; detail: string[]; artifacts: string[]; ran: boolean }> { // 返回模拟结果
   const anomalies: Anomaly[] = [] // 累积异常
   const detail: string[] = [] // 累积详细说明
@@ -473,6 +477,7 @@ async function simulateDesktop( // 定义桌面模拟函数
       anomalies.push({ kind: 'crash', where: '程序进程', message: '程序在模拟过程中崩溃/退出' + (result.crashInfo ? '：' + result.crashInfo : '') }) // 记录崩溃异常
     }
     for (const action of result.actions) { // 逐个操作检查
+      trace?.operations.push({ kind: 'desktop', action: action.action, target: action.target || undefined, ok: action.ok, error: action.error || undefined }) // 记录真实桌面操作（供 GUI 展示）
       if (!action.ok) { // 操作失败
         anomalies.push({ kind: 'unresponsive', where: '桌面操作: ' + action.action + (action.target ? ' (' + action.target + ')' : ''), message: action.error ?? '操作未成功' }) // 记录无响应异常
       }
@@ -492,6 +497,7 @@ export async function runStep3( // 定义第 3 步主函数
   opts: CheckOptions, // 检查配置
   io: EngineIo, // IO 适配器
   project?: ProjectFiles, // 项目文件采样（GUI 判定用；缺省时按项目类型推断）
+  trace?: CheckTrace, // 追踪容器（记录模拟类型 / GUI 判定 / 真实操作 / 截图）
 ): Promise<StepResult> { // 返回步骤结果
   const started = Date.now() // 记录开始时间
   const detail: string[] = [] // 累积详细说明
@@ -519,17 +525,21 @@ export async function runStep3( // 定义第 3 步主函数
     Object.assign(plan, desktopDefaultPlan()) // 替换为桌面默认计划
   }
   detail.push('模拟类型: ' + plan.kind + (plan.startNote ? '；启动说明: ' + plan.startNote : '')) // 记录模拟类型
+  if (trace) { // 有追踪容器时记录模拟类型与 GUI 判定
+    trace.simKind = plan.kind // 模拟类型
+    trace.hasGui = gui !== 'none' // 是否带界面
+  }
 
   let result: { anomalies: Anomaly[]; detail: string[]; artifacts: string[]; ran: boolean } // 声明模拟结果
   switch (plan.kind) { // 按计划类型分派
     case 'web': // web 模拟
-      result = await simulateWeb(plan, projectInfo, opts, io, artifacts) // 执行 web 模拟
+      result = await simulateWeb(plan, projectInfo, opts, io, artifacts, trace) // 执行 web 模拟
       break // 跳出 switch
     case 'cli': // cli 模拟
       result = await simulateCli(plan, projectInfo, opts, io) // 执行 cli 模拟
       break // 跳出 switch
     case 'desktop': // 桌面模拟
-      result = await simulateDesktop(plan, projectInfo, opts, io, artifacts) // 执行桌面模拟
+      result = await simulateDesktop(plan, projectInfo, opts, io, artifacts, trace) // 执行桌面模拟
       break // 跳出 switch
     default: // 无法确定模拟方式
       result = { anomalies: [], detail: ['无法确定模拟方式，跳过用户模拟。'], artifacts: [], ran: false } // 返回未运行
@@ -537,6 +547,7 @@ export async function runStep3( // 定义第 3 步主函数
   anomalies.push(...result.anomalies) // 合并异常
   detail.push(...result.detail) // 合并说明
   produced.push(...result.artifacts) // 合并产物
+  if (trace) trace.screenshots = produced // 记录截图产物（供 GUI 展示）
   for (const anomaly of anomalies) { // 把异常转成问题
     const level = anomaly.kind === 'warning' ? 'warning' : 'error' // warning 级异常对应 warning，其余为 error
     findings.push({ level, where: anomaly.where, message: anomaly.message, evidence: anomaly.evidence }) // 记录问题

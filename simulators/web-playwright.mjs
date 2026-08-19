@@ -87,7 +87,7 @@ async function shot(name) {                                 // 定义截图函�
 
 async function runAction(action) {                          // 定义执行单个交互动作的函数
   const started = Date.now()                                // 记录动作开始时间戳
-  const record = { action: action.action, target: action.target ?? '', ok: true, durationMs: 0, error: undefined }   // 初始化动作结果记录
+  const record = { action: action.action, target: action.target ?? '', value: action.value ?? '', ok: true, durationMs: 0, error: undefined }   // 初始化动作结果记录
   try {
     switch (action.action) {                                // 根据动作类型分发处理
       case 'goto': {                                        // 页面跳转动作

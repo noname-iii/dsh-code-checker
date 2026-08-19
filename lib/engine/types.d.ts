@@ -177,6 +177,57 @@ export interface StepResult {
     /** 本步骤耗时（毫秒）。 */
     durationMs: number;
 }
+/** 一次命令执行的追踪记录（“画面”视图的“命令行”面板数据源）。 */
+export interface TraceCommand {
+    /** 完整命令文本。 */
+    command: string;
+    /** 工作目录。 */
+    cwd: string;
+    /** 标准输出（已截断）。 */
+    stdout: string;
+    /** 标准错误（已截断）。 */
+    stderr: string;
+    /** 退出码；后台进程/被信号杀死时为 null。 */
+    exitCode: number | null;
+    /** 是否超时被杀。 */
+    timedOut: boolean;
+    /** 耗时（毫秒）。 */
+    durationMs: number;
+}
+/** 一次真实用户操作（“画面”视图的“GUI”面板数据源，仅 web / desktop）。 */
+export interface TraceOperation {
+    /** 操作类型：web / desktop。 */
+    kind: 'web' | 'desktop';
+    /** 动作：goto / click / type / press / wait / drag / screenshot 等。 */
+    action: string;
+    /** 目标（控件文字 / CSS 选择器 / URL 路径）。 */
+    target?: string;
+    /** 输入文本 / 按键 / 等待毫秒数。 */
+    value?: string;
+    /** 操作是否成功。 */
+    ok: boolean;
+    /** 耗时（毫秒）。 */
+    durationMs?: number;
+    /** 失败原因。 */
+    error?: string;
+}
+/** 检查过程的追踪数据（“画面”视图数据源）。 */
+export interface CheckTrace {
+    /** 整次检查的日志行（按时间顺序）。 */
+    logs: string[];
+    /** 执行过的命令与结果（命令行面板）。 */
+    commands: TraceCommand[];
+    /** 真实用户操作（GUI 面板，仅 web / desktop）。 */
+    operations: TraceOperation[];
+    /** 模拟类型。 */
+    simKind: 'web' | 'cli' | 'desktop' | 'none';
+    /** 项目是否带界面（GUI）。 */
+    hasGui: boolean;
+    /** web 模拟探测/启动到的服务地址。 */
+    baseUrl?: string;
+    /** 截图产物路径。 */
+    screenshots: string[];
+}
 /** 完整检查报告 —— 引擎的最终产出。 */
 export interface CheckReport {
     /** 是否整体通过（无任何 error 级问题、无缺失功能、无异常）。 */
@@ -205,4 +256,6 @@ export interface CheckReport {
     summary: string;
     /** 渲染好的、可直接回传 AI 的完整报告文本。 */
     rendered: string;
+    /** 检查过程的追踪数据（“画面”视图：日志 / 命令行 / 真实操作；可选）。 */
+    trace?: CheckTrace;
 }
