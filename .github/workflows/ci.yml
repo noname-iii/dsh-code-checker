@@ -1,0 +1,21 @@
+# 文件作用：GitHub Actions 自动测试 —— 每次 push / PR 都运行插件自带测试套件，
+# 作为“发布到 GitHub”前的一道自动化验证（引擎 + Harness 层，零外部运行时依赖，
+# 直接运行已提交的 lib/ 产物；完整类型检查需要本机 deepseek-harness 检出一，故不在此执行）。
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 运行测试套件（引擎 + Harness 层）
+        run: node --test --experimental-test-isolation=none tests/engine.test.mjs tests/harness.test.mjs

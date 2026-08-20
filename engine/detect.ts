@@ -27,6 +27,8 @@ export interface ProjectInfo { // 导出“项目信息”接口
   buildCommands: string[] // 构建命令列表（按顺序尝试，成功即止）
   /** 运行命令（按顺序尝试）。 */
   runCommands: string[] // 运行命令列表（按顺序尝试）
+  /** 自动化测试命令（第 3 步执行；Node 项目等价于 `pnpm test`，非 Node 项目用等价测试命令）。 */
+  testCommands: string[] // 自动化测试命令列表（按顺序尝试）
   /** 项目内是否存在 TypeScript 配置。 */
   hasTsConfig: boolean // 项目内是否存在 TypeScript 配置
   /** 项目是否带用户界面（GUI）—— 由项目类型与依赖推断（最终结论还需结合 guiEvidence 的源码证据）。 */
@@ -62,6 +64,7 @@ export async function detectProject(dir: string, io: EngineIo): Promise<ProjectI
     entryCandidates: [], // 入口候选初始为空数组
     buildCommands: [], // 构建命令初始为空数组
     runCommands: [], // 运行命令初始为空数组
+    testCommands: [], // 自动化测试命令初始为空数组
     hasTsConfig: await exists(dir, 'tsconfig.json'), // 检查是否存在 tsconfig.json
     readme, // 保存 README 内容
   }
@@ -163,6 +166,53 @@ export async function detectProject(dir: string, io: EngineIo): Promise<ProjectI
     base.kind = 'dotnet' // 类型为 dotnet
     base.buildCommands.push('dotnet build') // 加入 dotnet build 命令
     base.runCommands.push('dotnet run') // 加入 dotnet run 命令
+  }
+
+  // ── 自动化测试命令（第 3 步执行）：Node 项目等价于 `pnpm test`，非 Node 项目推导等价测试命令 ──
+  if (pkg && (base.kind === 'node' || base.kind === 'node-web' || base.kind === 'electron')) { // Node 系项目
+    if (pkg.scripts?.test) { // 有 test 脚本时按锁文件选择包管理器运行（缺省 pnpm，契合“pnpm test”）
+      const pm = base.lockfile === 'npm' ? 'npm' : base.lockfile === 'yarn' ? 'yarn' : base.lockfile === 'bun' ? 'bun' : 'pnpm' // 锁文件 → 包管理器
+      base.testCommands.push(pm + ' test') // 等价于 `pnpm test` / `npm test` / `yarn test` / `bun test`
+    }
+  } else if (base.kind === 'rust') { // Rust：cargo test（无测试也安全，退出 0）
+    base.testCommands.push('cargo test')
+  } else if (base.kind === 'go') { // Go：go test ./...（无测试也安全）
+    base.testCommands.push('go test ./...')
+  } else if (base.kind === 'python') { // Python：pytest 优先，回退 unittest discover
+    const pytestEvidence = await exists(dir, 'pytest.ini') || await exists(dir, 'conftest.py') || await exists(dir, 'tox.ini') // pytest 配置证据
+    let usePytest = pytestEvidence
+    if (!usePytest) { // 再看 pyproject.toml 是否含 pytest 配置
+      try {
+        const pyproject = await fsp.readFile(join(dir, 'pyproject.toml'), 'utf8')
+        usePytest = /\[tool\.pytest|pytest/i.test(pyproject)
+      } catch { /* 无 pyproject.toml */ }
+    }
+    if (usePytest) { // 有 pytest 证据
+      base.testCommands.push(pyBin + ' -m pytest -q')
+    } else { // 否则检测是否有测试文件，有则跑 unittest discover
+      const files = await scanProject(dir)
+      const hasTests = files.some(f => /(^|\/)(tests?|test|spec)\//i.test(f.rel) || /(^|\/)[^/]*(?:test|spec)[^/]*\.py$/i.test(f.rel))
+      if (hasTests) base.testCommands.push(pyBin + ' -m unittest discover -v')
+    }
+  } else if (base.kind === 'java') { // Java：mvn test / gradle test
+    if (await exists(dir, 'build.gradle') || await exists(dir, 'build.gradle.kts')) base.testCommands.push('gradle test --console=plain')
+    else base.testCommands.push('mvn -q test')
+  } else if (base.kind === 'dotnet') { // .NET：存在测试工程才跑 dotnet test（避免无测试工程时误报）
+    const files = await scanProject(dir)
+    const hasTestProject = files.some(f => /\.(csproj|fsproj|vbproj)$/i.test(f.rel) && /test|spec/i.test(f.rel))
+    if (hasTestProject) base.testCommands.push('dotnet test')
+  } else if (base.kind === 'cpp') { // C/C++：CMake 有 enable_testing/add_test 才跑 ctest，否则 Makefile 有 test/check 目标才跑 make test
+    if (await exists(dir, 'CMakeLists.txt')) {
+      try {
+        const cmakeText = await fsp.readFile(join(dir, 'CMakeLists.txt'), 'utf8')
+        if (/enable_testing|add_test/i.test(cmakeText)) base.testCommands.push('ctest --output-on-failure')
+      } catch { /* 忽略读取失败 */ }
+    } else {
+      try {
+        const makeText = await fsp.readFile(join(dir, 'Makefile'), 'utf8')
+        if (/^\s*(test|check)\s*:/m.test(makeText)) base.testCommands.push('make test')
+      } catch { /* 忽略读取失败 */ }
+    }
   }
 
   // GUI 推断（第 1 层）：项目类型 + 依赖特征。

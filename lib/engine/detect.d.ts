@@ -26,6 +26,8 @@ export interface ProjectInfo {
     buildCommands: string[];
     /** 运行命令（按顺序尝试）。 */
     runCommands: string[];
+    /** 自动化测试命令（第 3 步执行；Node 项目等价于 `pnpm test`，非 Node 项目用等价测试命令）。 */
+    testCommands: string[];
     /** 项目内是否存在 TypeScript 配置。 */
     hasTsConfig: boolean;
     /** 项目是否带用户界面（GUI）—— 由项目类型与依赖推断（最终结论还需结合 guiEvidence 的源码证据）。 */

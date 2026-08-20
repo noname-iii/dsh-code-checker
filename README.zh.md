@@ -34,7 +34,7 @@
 |---|---|---|
 | **第 1 步 编译与运行检查** | 识别项目类型（Node/Python/Rust/Go/C++/Java/.NET/静态 Web/Electron/桌面 exe），安装依赖、逐条执行**所有**构建命令、启动运行探针，收集所有报错 | 有报错 → **直接把具体报错信息返回给 AI**（含出错位置“文件:行号”、错误原因），并**一次性列出本步收集到的全部错误**，不再进行后续步骤 |
 | **第 2 步 功能完整性核对** | 读取用户提示词/上下文中的**全部**需求，逐条核对是否实现（启发式关键词/文件结构检查 + 可选 LLM 深度分析 + **行为验证：模拟用户真实打开项目——web 用 Playwright 抓取渲染后页面文本、CLI 跑 --help/--version，看“运行后所见”是否包含该功能**） | 有缺失 → 继续检查到底，**一次性汇报所有未实现/不完整的功能**；全部实现才进入第 3 步 |
-| **第 3 步 真实用户模拟** | 按用户描述的功能（或 README.md）模拟真实用户：Web 用 Playwright 点击/输入/拖拽/按键，并**自动逐页审计**（对访问到的每个页面检查是否一直卡在某个页面、或卡在“加载中”等加载指示）与**遍历点击页面上所有按钮**（逐个点击并记录每个按钮点击后的状态/异样）；Windows 桌面程序用 UIA 真实鼠标键盘 + 卡死检测 + 截图；CLI 用命令驱动；记录**卡顿、无响应、报错、崩溃**。**第 1、2 步都通过后执行；只要项目带 GUI（用户界面，如 DSH 插件面板/网页/桌面窗口），第 3 步必须走 GUI 模拟，绝不退化成 CLI 模拟** | 有异常 → 全部记录并汇报给 AI；无异常 → 返回 **“没有问题”** 并让 AI 继续工作 |
+| **第 3 步 真实用户模拟** | **先运行项目自动化测试**（Node 项目跑 `pnpm test`；非 Node 项目跑等价测试命令，如 `cargo test`/`go test ./...`/`pytest`/`mvn test`/`dotnet test`），测试失败即记录报错；再按用户描述的功能（或 README.md）模拟真实用户：Web 用 Playwright 点击/输入/拖拽/按键，并**自动逐页审计**（对访问到的每个页面检查是否一直卡在某个页面、或卡在“加载中”等加载指示）与**遍历点击页面上所有按钮**（逐个点击并记录每个按钮点击后的状态/异样）；Windows 桌面程序用 UIA 真实鼠标键盘 + 卡死检测 + 截图；CLI 用命令驱动；记录**卡顿、无响应、报错、崩溃**。**第 1、2 步都通过后执行；只要项目带 GUI（用户界面，如 DSH 插件面板/网页/桌面窗口），第 3 步必须走 GUI 模拟，绝不退化成 CLI 模拟** | 有异常 → 全部记录并汇报给 AI；无异常 → 返回 **“没有问题”** 并让 AI 继续工作 |
 
 ### 触发方式（Harness 内）—— 双保险，两种方式同时生效
 
@@ -134,8 +134,8 @@ pnpm dsh web
 
 ## 下载插件
 
-> **最新 release：v0.4.1**（已发布于 GitHub Releases，含离线 tarball 附件
-> `dsh-code-checker-0.4.1.tgz`）。下载地址：
+> **最新 release：v0.5.0**（已发布于 GitHub Releases，含离线 tarball 附件
+> `dsh-code-checker-0.5.0.tgz`）。下载地址：
 > <https://github.com/noname-iii/dsh-code-checker/releases/latest>
 > 已装过旧版本？见下方 [FAQ](#常见-qa) 第 15 条（无需重新克隆，重装/更新即可）。
 
@@ -175,18 +175,18 @@ dsh plugin --profile web add github:noname-iii/dsh-code-checker
 
 ### 方式 4：release 离线 tarball（无法访问 GitHub / npm 的机器）
 
-1. 到 <https://github.com/noname-iii/dsh-code-checker/releases/latest> 下载附件 `dsh-code-checker-0.4.1.tgz`。
+1. 到 <https://github.com/noname-iii/dsh-code-checker/releases/latest> 下载附件 `dsh-code-checker-0.5.0.tgz`。
 2. 在终端 `cd` 到该文件所在目录，执行：
 
 ```bash
-dsh plugin --profile web add ./dsh-code-checker-0.4.1.tgz
+dsh plugin --profile web add ./dsh-code-checker-0.5.0.tgz
 ```
 
 > 想自己打 tarball 也可以（效果等价于方式 4）：在插件目录里执行
 >
 > ```bash
-> pnpm pack    # 生成 dsh-code-checker-0.4.1.tgz
-> dsh plugin --profile web add ./dsh-code-checker-0.4.1.tgz
+> pnpm pack    # 生成 dsh-code-checker-0.5.0.tgz
+> dsh plugin --profile web add ./dsh-code-checker-0.5.0.tgz
 > ```
 
 ---

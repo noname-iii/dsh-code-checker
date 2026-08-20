@@ -358,3 +358,80 @@ test('带 GUI 的插件项目：第 2 步有缺失功能时，第 3 步仍按流
     await rm(dir, { recursive: true, force: true }) // 清理临时项目
   }
 })
+
+/** 构造一个带 test 脚本的 Node 临时项目（用于验证第 3 步自动化测试 pnpm test）。 */
+async function makeNodeTestProject() {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-cc-node-test-')) // 临时目录
+  await writeFile(join(dir, 'package.json'), JSON.stringify({ name: 'node-test-project', version: '1.0.0', main: 'index.js', scripts: { test: 'node test.js' } }), 'utf8') // 含 test 脚本（无锁文件 → 默认 pnpm test）
+  await writeFile(join(dir, 'index.js'), 'console.log("greet ready")', 'utf8') // 入口（含 greet 痕迹）
+  return dir // 返回临时目录
+}
+
+/** 构造一个 Rust 临时项目（用于验证非 Node 项目的等价自动化测试 cargo test）。 */
+async function makeRustTestProject() {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-cc-rust-test-')) // 临时目录
+  await writeFile(join(dir, 'Cargo.toml'), '[package]', 'utf8') // Cargo.toml（rust 类型证据）
+  await writeFile(join(dir, 'main.rs'), 'fn main() { println!("hello") }', 'utf8') // 源码（含 hello 痕迹）
+  return dir // 返回临时目录
+}
+
+test('Node 项目：第 3 步运行 pnpm test（自动化测试）且通过', async () => {
+  const dir = await makeNodeTestProject() // 建临时 Node 项目
+  try {
+    const io = makeIo([
+      { match: (opts) => opts.command.includes('pnpm test'), result: async () => ({ exitCode: 0, signal: null, timedOut: false, aborted: false, stdout: '2 tests passed', stderr: '', durationMs: 30 }) },
+      { match: (opts) => opts.command.includes('node "index.js"'), result: async () => ({ exitCode: 0, signal: null, timedOut: false, aborted: false, stdout: 'greet ready', stderr: '', durationMs: 5 }) },
+    ])
+    const report = await runCheck({
+      projectDir: dir, requirements: ['实现 greet 命令'], requirementText: '实现 greet 命令',
+      installDeps: false, buildTimeoutMs: 60000, runProbeMs: 2000, simulate: true, runAllSteps: false,
+      useLlm: false, maxSampleFiles: 400, maxSampleBytes: 250000, language: 'zh', cleanMessage: '没有问题',
+    }, io)
+    assert.equal(report.ok, true, '自动化测试通过应整体通过（实际: ' + report.summary + '）')
+    assert.equal(report.steps[2].status, 'passed', '第 3 步应通过')
+    const step3Detail = (report.steps[2].detail ?? []).join('\n')
+    assert.ok(step3Detail.includes('pnpm test'), '第 3 步应包含 pnpm test 命令（实际: ' + step3Detail + '）')
+    assert.ok(step3Detail.includes('自动化测试通过'), '第 3 步应记录自动化测试通过')
+    assert.ok(report.trace.commands.some(c => c.command.includes('pnpm test')), '追踪应记录 pnpm test 命令')
+  } finally { await rm(dir, { recursive: true, force: true }) }
+})
+
+test('Node 项目：pnpm test 失败时第 3 步报错并导致整体不通过', async () => {
+  const dir = await makeNodeTestProject() // 建临时 Node 项目
+  try {
+    const io = makeIo([
+      { match: (opts) => opts.command.includes('pnpm test'), result: async () => ({ exitCode: 1, signal: null, timedOut: false, aborted: false, stdout: '', stderr: 'Error: assertion failed in test.js: expected 1 to equal 2', durationMs: 40 }) },
+      { match: (opts) => opts.command.includes('node "index.js"'), result: async () => ({ exitCode: 0, signal: null, timedOut: false, aborted: false, stdout: 'greet ready', stderr: '', durationMs: 5 }) },
+    ])
+    const report = await runCheck({
+      projectDir: dir, requirements: ['实现 greet 命令'], requirementText: '实现 greet 命令',
+      installDeps: false, buildTimeoutMs: 60000, runProbeMs: 2000, simulate: true, runAllSteps: false,
+      useLlm: false, maxSampleFiles: 400, maxSampleBytes: 250000, language: 'zh', cleanMessage: '没有问题',
+    }, io)
+    assert.equal(report.ok, false, '自动化测试失败应不通过')
+    assert.equal(report.steps[2].status, 'failed', '第 3 步应失败')
+    assert.ok(report.anomalies.some(a => a.kind === 'error' && a.where.includes('自动化测试')), '应记录自动化测试错误异常')
+    assert.ok(report.rendered.includes('assertion failed'), '报告应包含测试失败信息')
+  } finally { await rm(dir, { recursive: true, force: true }) }
+})
+
+test('非 Node 项目（Rust）：第 3 步运行等价自动化测试 cargo test 且通过', async () => {
+  const dir = await makeRustTestProject() // 建临时 Rust 项目
+  try {
+    const io = makeIo([
+      { match: (opts) => opts.command.includes('cargo test'), result: async () => ({ exitCode: 0, signal: null, timedOut: false, aborted: false, stdout: 'running 1 test ... ok', stderr: '', durationMs: 30 }) },
+      { match: (opts) => opts.command.includes('cargo check'), result: async () => ({ exitCode: 0, signal: null, timedOut: false, aborted: false, stdout: '', stderr: '', durationMs: 5 }) },
+      { match: (opts) => opts.command.includes('cargo run'), result: async () => ({ exitCode: 0, signal: null, timedOut: false, aborted: false, stdout: 'hello', stderr: '', durationMs: 5 }) },
+    ])
+    const report = await runCheck({
+      projectDir: dir, requirements: ['实现 hello 输出'], requirementText: '实现 hello 输出',
+      installDeps: false, buildTimeoutMs: 60000, runProbeMs: 2000, simulate: true, runAllSteps: false,
+      useLlm: false, maxSampleFiles: 400, maxSampleBytes: 250000, language: 'zh', cleanMessage: '没有问题',
+    }, io)
+    assert.equal(report.ok, true, '等价自动化测试通过应整体通过（实际: ' + report.summary + '）')
+    assert.equal(report.steps[2].status, 'passed', '第 3 步应通过')
+    const step3Detail = (report.steps[2].detail ?? []).join('\n')
+    assert.ok(step3Detail.includes('cargo test'), '第 3 步应包含 cargo test 命令（实际: ' + step3Detail + '）')
+    assert.ok(report.trace.commands.some(c => c.command.includes('cargo test')), '追踪应记录 cargo test 命令')
+  } finally { await rm(dir, { recursive: true, force: true }) }
+})
