@@ -121,7 +121,10 @@ export function apply(ctx: Context, config?: ConfigType): void { // 插件入口
     const requirements = extractRequirements(requirementText) // 从需求文本提取需求列表
 
     const analyzer = buildAnalyzer(agent) // 构造 LLM 分析器（可能为 undefined）
-    const io = makeEngineIo(ctx.shell, platform, analyzer, log, options.signal) // 构造引擎 IO（含 shell 执行与取消信号）
+    // 解析会话沙箱策略：让构建/运行沿用会话的 workspace 根目录，而非部署 fallback（web 进程 cwd）
+    const sandboxPolicyService: any = ctx.get('sandboxPolicy', false)
+    const sandboxPolicy = sandboxPolicyService ? sandboxPolicyService.resolve({ session }) : undefined
+    const io = makeEngineIo(ctx.shell, platform, analyzer, log, options.signal, sandboxPolicy) // 构造引擎 IO（含 shell 执行与取消信号）
     const checkOptions: CheckOptions = { // 组装传给引擎的检查选项对象
       projectDir, // 项目目录
       requirements, // 需求列表

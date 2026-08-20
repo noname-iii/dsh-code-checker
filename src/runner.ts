@@ -6,6 +6,8 @@
 
 // 引入 shell 执行器相关类型：ShellExecutor（执行器）与 ShellExecRequest（执行请求）
 import type { ShellExecutor, ShellExecRequest } from '@deepseek-ai/dsh-shell'
+// 引入沙箱执行策略类型：让构建/运行命令携带会话解析出的沙箱模式
+import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 // 引入 Agent 类型：代理对象
 import type { Agent } from '@deepseek-ai/dsh-agent'
 // 引入 randomUUID 函数：为手工构造的分析请求消息生成稳定 id
@@ -19,7 +21,7 @@ import type {
 
 /** ctx.shell → 前台执行适配器。 */
 // 导出工厂函数：把 shell 执行器适配成引擎的前台执行函数
-export function makeShellExec(shell: ShellExecutor): ExecFn {
+export function makeShellExec(shell: ShellExecutor, sandboxPolicy?: SandboxExecutionPolicy): ExecFn {
   // 返回一个异步执行函数，入参为执行选项
   return async (opts: ExecOptions) => {
     // 构造 shell 执行请求对象
@@ -34,6 +36,8 @@ export function makeShellExec(shell: ShellExecutor): ExecFn {
       ...opts.stdin !== undefined ? { stdin: opts.stdin } : {},
       // 仅当提供了 env 时才带上环境变量字段
       ...opts.env !== undefined ? { env: opts.env } : {},
+      // 仅当提供了 sandboxPolicy 时才带上沙箱策略字段（使构建/运行使用会话的 workspace-write 模式）
+      ...sandboxPolicy !== undefined ? { sandboxPolicy } : {},
       // 标准输出最大字节数上限
       stdoutMaxBytes: 1_500_000,
     }
@@ -65,7 +69,7 @@ export function makeShellExec(shell: ShellExecutor): ExecFn {
 
 /** ctx.shell → 后台启动适配器。 */
 // 导出工厂函数：把 shell 执行器适配成引擎的后台启动函数
-export function makeShellStart(shell: ShellExecutor): StartFn {
+export function makeShellStart(shell: ShellExecutor, sandboxPolicy?: SandboxExecutionPolicy): StartFn {
   // 返回一个异步启动函数，返回运行中的进程句柄
   return async (opts: ExecOptions): Promise<RunningProcess> => {
     // 构造并解析启动请求，得到执行规格
@@ -76,6 +80,8 @@ export function makeShellStart(shell: ShellExecutor): StartFn {
       ...opts.cwd !== undefined ? { workdir: opts.cwd } : {},
       // 仅当提供了 env 时才带上环境变量字段
       ...opts.env !== undefined ? { env: opts.env } : {},
+      // 仅当提供了 sandboxPolicy 时才带上沙箱策略字段
+      ...sandboxPolicy !== undefined ? { sandboxPolicy } : {},
       // 标准输出最大字节数上限
       stdoutMaxBytes: 1_500_000,
     })
@@ -233,13 +239,15 @@ export function makeEngineIo(
   log: (line: string) => void,
   // 中止信号（可选）
   signal?: AbortSignal,
+  // 沙箱策略（可选，来自会话解析）
+  sandboxPolicy?: SandboxExecutionPolicy,
 ): EngineIo {
   // 返回组装好的引擎 IO 对象
   return {
     // 前台执行函数
-    exec: makeShellExec(shell),
+    exec: makeShellExec(shell, sandboxPolicy),
     // 后台启动函数
-    start: makeShellStart(shell),
+    start: makeShellStart(shell, sandboxPolicy),
     // 平台标识
     platform,
     // 仅当提供了分析器时才带上 analyzer 字段
